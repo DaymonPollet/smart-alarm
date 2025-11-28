@@ -14,7 +14,8 @@ This system consists of two main components:
 ### 2. **Edge Component** (`edge/rpi_smart_alarm.py`)
 - Runs on Raspberry Pi 5
 - Connects to Azure IoT Hub as a device
-- Receives sleep data via cloud-to-device messages
+- Receives sleep data via cloud-to-device messages (this is the most important endpoint: https://dev.fitbit.com/build/reference/web-api/intraday/get-heartrate-intraday-by-date/ (avg heartrate per minute), https://dev.fitbit.com/build/reference/web-api/sleep/get-sleep-log-by-date/ (for sleep info), https://dev.fitbit.com/build/reference/web-api/intraday/get-activity-intraday-by-date/ (movement lvl per minute (or chosen interval) where no movement is 0 and light movement is 1))
+-
 - Runs AI model to analyze sleep stages
 - Triggers physical alarm at optimal wake-up time
 - Controls buzzer and LED indicators via GPIO
@@ -61,7 +62,7 @@ notepad config\.env
 
 #### 2. Set Up Fitbit API Access
 
-1. Go to [Fitbit Developer Portal](https://dev.fitbit.com/apps)
+1. Go to [Fitbit Developer Portal](https://dev.fitbit.com/apps) -> https://dev.fitbit.com/build/reference/web-api (for most endpoints)
 2. Create a new application
 3. Set OAuth 2.0 Application Type to **Personal**
 4. Note your **Client ID** and **Client Secret**
