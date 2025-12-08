@@ -4,6 +4,8 @@
 .env
 config/.env
 *.env
+config\.env.template1
+data/*
 
 # Python
 __pycache__/
