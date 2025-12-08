@@ -1,14 +1,4 @@
-# Raspberry Pi Smart Alarm - Edge Requirements
-# =============================================
-
-# Azure IoT Device SDK (for device-to-cloud communication)
 azure-iot-device==2.13.0
-
-# NumPy for numerical computations
 numpy==1.24.3
-
-# GPIO control for Raspberry Pi (only needed on actual Pi hardware)
-# RPi.GPIO==0.7.1  # Uncomment when running on Raspberry Pi
-
-# Utilities
 python-dateutil==2.8.2
+python-dotenv
