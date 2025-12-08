@@ -3,7 +3,7 @@ Test Data Generator for Smart Alarm System
 ==========================================
 Generates realistic mock sleep data for testing without Fitbit API
 """
-
+# this is purely for testing purposes as I may lack enough real data to train the model well
 import json
 from datetime import datetime, timedelta
 import random

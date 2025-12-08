@@ -313,4 +313,4 @@ For issues or questions, please check the troubleshooting section above.
 
 ---
 
-**Built with** ❤️ **using Python, Azure IoT Hub, Fitbit API, and Raspberry Pi, maybe gonne do it in a better language like Java soon**
+**Built with** ❤️ **using Python (sarcastically), Azure IoT Hub, Fitbit API, and Raspberry Pi, maybe gonne do it in a better language like Java soon**
