@@ -1,0 +1,86 @@
+/* christmas.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap');
+
+.root {
+    -fx-background-color: #FAF8F5;
+    -fx-font-family: 'Lato', sans-serif;
+    -color-primary-accent: #006400;
+    -color-secondary-accent: #C82124;
+    -color-text: #332D2D;
+    -color-surface: #FFFFFF;
+    -color-light-divider: #E9E6E3;
+}
+
+.label {
+    -fx-text-fill: #332D2D;
+}
+
+.header-label {
+    -fx-font-family: 'Playfair Display', serif;
+    -fx-font-size: 40px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #006400;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 5, 0, 0, 1);
+}
+
+.sub-header-label {
+    -fx-font-family: 'Playfair Display', serif;
+    -fx-font-size: 24px;
+    -fx-text-fill: #C82124;
+    -fx-padding: 0 0 20 0;
+}
+
+.card {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 10;
+    -fx-border-color: #E9E6E3;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5);
+    -fx-padding: 20;
+}
+
+.button {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #006400;
+    -fx-border-color: #006400;
+    -fx-border-width: 3;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-font-weight: bold;
+    -fx-padding: 10 20;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #006400;
+    -fx-text-fill: #FFFFFF;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,100,0,0.4), 15, 0, 0, 5);
+}
+
+.button-accent {
+    -fx-background-color: #C82124;
+    -fx-text-fill: #FFFFFF;
+    -fx-border-color: #C82124;
+}
+
+.button-accent:hover {
+    -fx-background-color: #A31B1E;
+    -fx-effect: dropshadow(three-pass-box, rgba(200,33,36,0.7), 20, 0, 0, 5);
+}
+
+.status-indicator {
+    -fx-background-color: #C82124;
+    -fx-background-radius: 50%;
+    -fx-min-width: 12px;
+    -fx-min-height: 12px;
+    -fx-effect: dropshadow(gaussian, #C82124, 8, 0.5, 0, 0);
+}
+
+.navbar {
+    -fx-background-color: #FFFFFF;
+    -fx-padding: 15;
+    -fx-border-color: linear-gradient(to right, #C82124 50%, #006400 50%);
+    -fx-border-width: 0 0 5 0;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 8, 0, 0, 2);
+}
