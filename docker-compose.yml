@@ -6,5 +6,13 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  python-model-service:
+    build: ./backend/python-model-service
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/python-model-service:/app
+
 volumes:
   redis_data:

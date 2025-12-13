@@ -1,0 +1,40 @@
+name: Canary Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/python-model-service
+        push: true
+        tags: |
+          daymonpollet/smart-alarm-cloud-computing:latest
+          daymonpollet/smart-alarm-cloud-computing:${{ github.sha }}
+
+    - name: Deploy Canary
+      run: |
+        kubectl apply -f k8s/canary/deployment.yaml
+        kubectl rollout status deployment/sleep-model-canary
+
+    - name: Promote to Production
+      run: |
+        kubectl set image deployment/sleep-model-deployment sleep-model=daymonpollet/smart-alarm-cloud-computing:${{ github.sha }}
+        kubectl rollout status deployment/sleep-model-deployment
+        kubectl delete -f k8s/canary/deployment.yaml

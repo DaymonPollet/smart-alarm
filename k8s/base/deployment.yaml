@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sleep-model-deployment
+  labels:
+    app: sleep-model
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sleep-model
+  template:
+    metadata:
+      labels:
+        app: sleep-model
+    spec:
+      containers:
+      - name: sleep-model
+        image: daymonpollet/smart-alarm-cloud-computing:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000

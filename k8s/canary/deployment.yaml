@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sleep-model-canary
+  labels:
+    app: sleep-model
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sleep-model
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: sleep-model
+        track: canary
+    spec:
+      containers:
+      - name: sleep-model
+        image: daymonpollet/smart-alarm-cloud-computing:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000

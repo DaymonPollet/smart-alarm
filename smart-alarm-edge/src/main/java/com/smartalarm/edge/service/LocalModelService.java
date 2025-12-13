@@ -1,5 +1,6 @@
-package com.smartalarm.edge;
+package com.smartalarm.edge.service;
 
+import com.smartalarm.edge.model.SleepData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
@@ -27,12 +28,12 @@ public class LocalModelService {
             HttpPost request = new HttpPost(endpointUrl);
             
             Map<String, Double> payload = new HashMap<>();
-            payload.put("mean_hr", data.getMeanHr());
-            payload.put("std_hr", data.getStdHr());
-            payload.put("min_hr", data.getMinHr());
-            payload.put("max_hr", data.getMaxHr());
-            payload.put("mean_activity", data.getMeanActivity());
-            payload.put("std_activity", data.getStdActivity());
+            payload.put("mean_hr", data.meanHr());
+            payload.put("std_hr", data.stdHr());
+            payload.put("min_hr", data.minHr());
+            payload.put("max_hr", data.maxHr());
+            payload.put("mean_activity", data.meanActivity());
+            payload.put("std_activity", data.stdActivity());
             
             String json = objectMapper.writeValueAsString(payload);
             request.setEntity(new StringEntity(json, ContentType.APPLICATION_JSON));
