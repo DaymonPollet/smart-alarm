@@ -1,6 +1,6 @@
 package com.smartalarm.edge.service;
 
-import com.smartalarm.edge.model.SleepData;
+import com.smartalarm.edge.domain.SleepData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.methods.HttpPost;

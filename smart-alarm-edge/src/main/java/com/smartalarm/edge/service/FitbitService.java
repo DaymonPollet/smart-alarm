@@ -1,6 +1,6 @@
 package com.smartalarm.edge.service;
 
-import com.smartalarm.edge.model.SleepData;
+import com.smartalarm.edge.domain.SleepData;
 import java.util.Random;
 
 public class FitbitService {

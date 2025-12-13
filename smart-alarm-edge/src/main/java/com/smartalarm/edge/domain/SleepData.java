@@ -1,4 +1,4 @@
-package com.smartalarm.edge.model;
+package com.smartalarm.edge.domain;
 
 public value record SleepData(
     double meanHr,

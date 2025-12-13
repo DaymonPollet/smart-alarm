@@ -1,6 +1,6 @@
 package com.smartalarm.edge.service;
 
-import com.smartalarm.edge.model.SleepData;
+import com.smartalarm.edge.domain.SleepData;
 import com.microsoft.azure.sdk.iot.device.*;
 import com.microsoft.azure.sdk.iot.device.twin.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
