@@ -1,15 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Region?>
 
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.smartalarm.edge.ui.fx.SmartAlarmController"
-      spacing="10" style="-fx-padding: 20;">
+      spacing="20" styleClass="root" style="-fx-padding: 30;">
 
-    <Label text="Smart Alarm Edge Log" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
-    <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS"/>
+    <!-- Header -->
+    <HBox alignment="CENTER_LEFT" spacing="15">
+        <Label text="Smart Alarm Dashboard" styleClass="header-label"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <HBox alignment="CENTER" spacing="5">
+            <Region styleClass="status-indicator, status-connected" fx:id="statusIndicator"/>
+            <Label text="Connected" fx:id="statusLabel"/>
+        </HBox>
+    </HBox>
+
+    <!-- Main Content Grid -->
+    <HBox spacing="20" VBox.vgrow="ALWAYS">
+        <!-- Left Column: Controls & Stats -->
+        <VBox spacing="20" minWidth="250" styleClass="card">
+            <Label text="Device Controls" style="-fx-font-weight: bold; -fx-font-size: 16px;"/>
+            
+            <Button text="Sync to Cloud" onAction="#handleSync" maxWidth="Infinity" styleClass="button"/>
+            <Button text="Update Config" onAction="#handleConfigUpdate" maxWidth="Infinity" styleClass="button"/>
+            
+            <Label text="Current Metrics" style="-fx-font-weight: bold; -fx-padding: 10 0 0 0;"/>
+            <Label fx:id="hrLabel" text="Heart Rate: -- bpm"/>
+            <Label fx:id="hrvLabel" text="HRV (SDNN): -- ms"/>
+            <Label fx:id="stageLabel" text="Sleep Stage: --"/>
+        </VBox>
+
+        <!-- Right Column: Logs -->
+        <VBox spacing="10" HBox.hgrow="ALWAYS" styleClass="card">
+            <Label text="System Logs & Analysis" style="-fx-font-weight: bold;"/>
+            <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS" styleClass="text-area" wrapText="true"/>
+        </VBox>
+    </HBox>
 
 </VBox>

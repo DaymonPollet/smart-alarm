@@ -19,8 +19,10 @@ public class App extends Application {
         Parent root = fxmlLoader.load();
         controller = fxmlLoader.getController();
         
-        Scene scene = new Scene(root, 600, 400);
-        stage.setTitle("Smart Alarm Edge");
+        Scene scene = new Scene(root, 800, 600);
+        scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        
+        stage.setTitle("Smart Alarm Edge Dashboard");
         stage.setScene(scene);
         stage.show();
     }
