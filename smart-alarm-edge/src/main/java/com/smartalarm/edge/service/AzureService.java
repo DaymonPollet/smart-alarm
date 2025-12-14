@@ -74,7 +74,43 @@ public class AzureService {
         @Override
         public void TwinPropertyCallBack(Property property, Object context) {
             logger.accept("Property Changed: " + property.getKey() + " = " + property.getValue());
-            // TODO: Handle configuration changes (e.g., wake window)
+            
+            try {
+                if ("alarm_time".equals(property.getKey())) {
+                    String newTime = (String) property.getValue();
+                    logger.accept("Updating Alarm Time to: " + newTime);
+                    // In a real app, we would update a Configuration singleton or notify the Controller
+                    reportProperty("alarm_time", newTime);
+                } else if ("smart_wakeup_window".equals(property.getKey())) {
+                    int window = (int) property.getValue();
+                    logger.accept("Updating Wakeup Window to: " + window);
+                    reportProperty("smart_wakeup_window", window);
+                } else if ("cloud_service_url".equals(property.getKey())) {
+                    String url = (String) property.getValue();
+                    logger.accept("Updating Cloud Service URL to: " + url);
+                    // Notify controller or update singleton
+                    reportProperty("cloud_service_url", url);
+                }
+            } catch (Exception e) {
+                logger.accept("Failed to handle property update: " + e.getMessage());
+            }
+        }
+    }
+
+    public void reportProperty(String key, Object value) {
+        try {
+            TwinCollection reportedProperties = new TwinCollection();
+            reportedProperties.put(key, value);
+            client.updateReportedPropertiesAsync(reportedProperties, new ReportedPropertiesCallback(), null);
+        } catch (Exception e) {
+            logger.accept("Failed to report property: " + e.getMessage());
+        }
+    }
+
+    private class ReportedPropertiesCallback implements IotHubEventCallback {
+        @Override
+        public void execute(IotHubStatusCode status, Object context) {
+            logger.accept("Reported properties update status: " + status.name());
         }
     }
     

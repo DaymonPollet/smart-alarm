@@ -14,5 +14,14 @@ services:
     volumes:
       - ./backend/python-model-service:/app
 
+  smart-alarm-cloud:
+    build: ./smart-alarm-cloud
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+
 volumes:
   redis_data:

@@ -1,5 +1,6 @@
 package com.smartalarm.edge.service;
 
+import com.smartalarm.edge.domain.FitbitPacket;
 import com.smartalarm.edge.domain.SleepData;
 import java.util.Random;
 
@@ -14,7 +15,7 @@ public class FitbitService {
     // 3. Activity Intraday (1min): /1/user/-/activities/steps/date/[date]/1min.json
     //    - Proxy for movement.
 
-    public SleepData fetchLatestData() {
+    public FitbitPacket fetchLatestData() {
         // TODO: Implement OAuth 2.0 and real API calls
         // 1. Fetch 1sec HR data for the last 30 seconds.
         // 2. Calculate Mean HR and HRV (SDNN/RMSSD) from that 1s data.
@@ -35,6 +36,14 @@ public class FitbitService {
         double meanActivity = random.nextDouble() * 0.5; 
         double stdActivity = random.nextDouble() * 0.1;
         
-        return new SleepData(meanHr, stdHr, sdnn, rmssd, minHr, maxHr, meanActivity, stdActivity);
+        SleepData data = new SleepData(meanHr, stdHr, sdnn, rmssd, minHr, maxHr, meanActivity, stdActivity);
+        
+        // Mock Fitbit's own classification based on the data we just generated
+        String label = "LIGHT";
+        if (meanActivity > 0.3) label = "WAKE";
+        else if (sdnn > 50) label = "DEEP";
+        else if (meanHr > 70) label = "REM";
+        
+        return new FitbitPacket(data, label);
     }
 }
