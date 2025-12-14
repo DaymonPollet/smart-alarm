@@ -42,7 +42,7 @@ public class SmartAlarmController {
         fitbitService = new FitbitService();
         // Use environment variable for Model Service URL or fallback to Pi NodePort
         String modelUrl = System.getenv("MODEL_SERVICE_URL");
-        if (modelUrl == null) modelUrl = "http://localhost:30000/predict";
+        if (modelUrl == null) modelUrl = "http://192.168.137.11:30000/predict";
         modelService = new LocalModelService(modelUrl);
         
         azureService = new AzureService(this::log);
