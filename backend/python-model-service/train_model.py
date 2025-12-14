@@ -49,8 +49,10 @@ def extract_features(file_path):
         min_hr = hr_data.min()
         max_hr = hr_data.max()
         
+        # Simulate Fitbit "Activity" (Steps/Intensity) from raw accelerometer
+        # Fitbit gives 1-min resolution activity. We approximate this by averaging magnitude.
         mean_activity = acc_mag.mean()
-        std_activity = acc_mag.std() # Proxy for movement intensity
+        std_activity = acc_mag.std() 
         
         return {
             "mean_hr": mean_hr,
@@ -80,9 +82,7 @@ def get_label_from_filename(filename):
         return None
 
 def main():
-    print("Loading data...sdnn"],
-                features["rmssd"],
-                features["")
+    print("Loading data...")
     files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
     
     data = []
@@ -96,8 +96,15 @@ def main():
             features_list = [
                 features["mean_hr"],
                 features["std_hr"],
+                features["sdnn"],
+                features["rmssd"],
                 features["min_hr"],
                 features["max_hr"],
+                features["mean_activity"],
+                features["std_activity"]
+            ]
+            data.append(features_list)
+            labels.append(label)
                 features["mean_activity"],
                 features["std_activity"]
             ]

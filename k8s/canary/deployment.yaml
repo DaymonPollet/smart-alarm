@@ -1,21 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sleep-model-canary
+  name: sleep-model-deployment
   labels:
     app: sleep-model
-    track: canary
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: sleep-model
-      track: canary
   template:
     metadata:
       labels:
         app: sleep-model
-        track: canary
     spec:
       containers:
       - name: sleep-model

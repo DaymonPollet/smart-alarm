@@ -35,16 +35,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Deploy Canary
+    - name: Deploy to Pi
       run: |
+        # Ensure the deployment exists or create it
         kubectl apply -f k8s/canary/deployment.yaml
-        kubectl rollout status deployment/sleep-model-canary
+        
+        # Update the image
+        kubectl set image deployment/sleep-model-deployment sleep-model=daymonpollet/smart-alarm-cloud-computing:${{ github.sha }}
+        
+        # Wait for rollout
+        kubectl rollout status deployment/sleep-model-deployment
 
-  promote-to-prod:
-    needs: deploy-canary
-    runs-on: self-hosted
-    steps:
-    - uses: actions/checkout@v4
     
     - name: Promote to Production
       run: |
