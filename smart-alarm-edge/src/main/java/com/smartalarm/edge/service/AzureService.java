@@ -12,18 +12,24 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public class AzureService {
-    // TODO: Load from env or config
-    private static final String CONN_STRING = "HostName=your-hub.azure-devices.net;DeviceId=your-device;SharedAccessKey=your-key";
+    private String connectionString;
     private DeviceClient client;
     private final Consumer<String> logger;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AzureService(Consumer<String> logger) {
         this.logger = logger;
+        // Load from Environment Variable
+        // Note: In .env, IOTHUB_CONNECTION_STRING contains the DeviceId=RPISmartHome part
+        this.connectionString = System.getenv("IOTHUB_CONNECTION_STRING");
+        if (this.connectionString == null || this.connectionString.isEmpty()) {
+            logger.accept("ERROR: IOTHUB_CONNECTION_STRING not set in environment variables.");
+            throw new RuntimeException("IOTHUB_CONNECTION_STRING is required.");
+        }
     }
 
     public void connect() throws IOException, URISyntaxException {
-        client = new DeviceClient(CONN_STRING, IotHubClientProtocol.MQTT);
+        client = new DeviceClient(connectionString, IotHubClientProtocol.MQTT);
         client.open();
         
         // Subscribe to Desired Properties updates
