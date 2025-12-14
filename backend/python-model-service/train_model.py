@@ -31,9 +31,21 @@ def extract_features(file_path):
         # Calculate Magnitude of Acceleration
         acc_mag = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
         
+        # HRV Metrics Calculation
+        # Convert HR (BPM) to RR intervals (ms)
+        # RR = 60000 / HR
+        rr_intervals = 60000 / hr_data
+        
+        # SDNN: Standard Deviation of NN intervals
+        sdnn = rr_intervals.std()
+        
+        # RMSSD: Root Mean Square of Successive Differences
+        diff_rr = np.diff(rr_intervals)
+        rmssd = np.sqrt(np.mean(diff_rr**2)) if len(diff_rr) > 0 else 0
+        
         # Features
         mean_hr = hr_data.mean()
-        std_hr = hr_data.std() # Proxy for HRV
+        std_hr = hr_data.std() # Keep as simple HR variance
         min_hr = hr_data.min()
         max_hr = hr_data.max()
         
@@ -43,6 +55,8 @@ def extract_features(file_path):
         return {
             "mean_hr": mean_hr,
             "std_hr": std_hr,
+            "sdnn": sdnn,
+            "rmssd": rmssd,
             "min_hr": min_hr,
             "max_hr": max_hr,
             "mean_activity": mean_activity,
@@ -66,7 +80,9 @@ def get_label_from_filename(filename):
         return None
 
 def main():
-    print("Loading data...")
+    print("Loading data...sdnn"],
+                features["rmssd"],
+                features["")
     files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
     
     data = []

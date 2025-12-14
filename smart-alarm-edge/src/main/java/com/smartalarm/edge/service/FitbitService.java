@@ -25,6 +25,8 @@ public class FitbitService {
         
         // Simulate HRV (Standard Deviation of NN intervals - approximated by HR variance here for mock)
         double stdHr = 2 + random.nextDouble() * 5; 
+        double sdnn = stdHr * 10; // Mock SDNN
+        double rmssd = stdHr * 8; // Mock RMSSD
         
         double minHr = meanHr - 5;
         double maxHr = meanHr + 5;
@@ -33,6 +35,6 @@ public class FitbitService {
         double meanActivity = random.nextDouble() * 0.5; 
         double stdActivity = random.nextDouble() * 0.1;
         
-        return new SleepData(meanHr, stdHr, minHr, maxHr, meanActivity, stdActivity);
+        return new SleepData(meanHr, stdHr, sdnn, rmssd, minHr, maxHr, meanActivity, stdActivity);
     }
 }

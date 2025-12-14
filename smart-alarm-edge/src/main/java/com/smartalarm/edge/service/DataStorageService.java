@@ -23,6 +23,8 @@ public class DataStorageService {
                      "ts TIMESTAMP, " +
                      "mean_hr DOUBLE, " +
                      "std_hr DOUBLE, " +
+                     "sdnn DOUBLE, " +
+                     "rmssd DOUBLE, " +
                      "min_hr DOUBLE, " +
                      "max_hr DOUBLE, " +
                      "mean_activity DOUBLE, " +
@@ -39,15 +41,17 @@ public class DataStorageService {
     public void storeRaw(SleepData data) {
         try (Connection conn = DriverManager.getConnection(URL, USER, PASS);
              PreparedStatement stmt = conn.prepareStatement(
-                 "INSERT INTO sleep_data VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+                 "INSERT INTO sleep_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             
             stmt.setTimestamp(1, new Timestamp(data.timestamp()));
             stmt.setDouble(2, data.meanHr());
             stmt.setDouble(3, data.stdHr());
-            stmt.setDouble(4, data.minHr());
-            stmt.setDouble(5, data.maxHr());
-            stmt.setDouble(6, data.meanActivity());
-            stmt.setDouble(7, data.stdActivity());
+            stmt.setDouble(4, data.sdnn());
+            stmt.setDouble(5, data.rmssd());
+            stmt.setDouble(6, data.minHr());
+            stmt.setDouble(7, data.maxHr());
+            stmt.setDouble(8, data.meanActivity());
+            stmt.setDouble(9, data.stdActivity());
             
             stmt.execute();
         } catch (SQLException e) {

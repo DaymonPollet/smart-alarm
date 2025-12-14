@@ -30,6 +30,8 @@ public class LocalModelService {
             Map<String, Double> payload = new HashMap<>();
             payload.put("mean_hr", data.meanHr());
             payload.put("std_hr", data.stdHr());
+            payload.put("sdnn", data.sdnn());
+            payload.put("rmssd", data.rmssd());
             payload.put("min_hr", data.minHr());
             payload.put("max_hr", data.maxHr());
             payload.put("mean_activity", data.meanActivity());

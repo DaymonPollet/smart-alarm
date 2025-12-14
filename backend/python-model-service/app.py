@@ -24,13 +24,15 @@ def predict():
     try:
         data = request.get_json()
         # Expecting a list of features or a dictionary
-        # Features: mean_hr, std_hr, min_hr, max_hr, mean_activity, std_activity
+        # Features: mean_hr, std_hr, sdnn, rmssd, min_hr, max_hr, mean_activity, std_activity
         
         features = []
         if isinstance(data, dict):
             features = [
                 data.get("mean_hr", 0),
                 data.get("std_hr", 0),
+                data.get("sdnn", 0),
+                data.get("rmssd", 0),
                 data.get("min_hr", 0),
                 data.get("max_hr", 0),
                 data.get("mean_activity", 0),
