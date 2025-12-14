@@ -105,9 +105,8 @@ def main():
             ]
             data.append(features_list)
             labels.append(label)
-                features["mean_activity"],
-                features["std_activity"]
-            ]
+            features["mean_activity"],
+            features["std_activity"],
             data.append(features_list)
             labels.append(label)
             

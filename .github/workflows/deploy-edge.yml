@@ -37,8 +37,9 @@ jobs:
 
     - name: Deploy to Pi
       run: |
-        # Ensure the deployment exists or create it
+        # Ensure the deployment and service exist
         kubectl apply -f k8s/canary/deployment.yaml
+        kubectl apply -f k8s/service.yaml
         
         # Update the image
         kubectl set image deployment/sleep-model-deployment sleep-model=daymonpollet/smart-alarm-cloud-computing:${{ github.sha }}
