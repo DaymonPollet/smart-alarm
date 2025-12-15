@@ -16,6 +16,10 @@ def load_model():
     else:
         print("Model file not found. Please train the model first.")
 
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({"status": "Model Service Running", "model_loaded": model is not None})
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if not model:
@@ -23,8 +27,6 @@ def predict():
     
     try:
         data = request.get_json()
-        # Expecting a list of features or a dictionary
-        # Features: mean_hr, std_hr, sdnn, rmssd, min_hr, max_hr, mean_activity, std_activity
         
         features = []
         if isinstance(data, dict):
@@ -41,7 +43,6 @@ def predict():
         elif isinstance(data, list):
             features = data
         
-        # Reshape for prediction
         features_array = np.array(features).reshape(1, -1)
         
         prediction = model.predict(features_array)[0]

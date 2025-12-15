@@ -6,6 +6,9 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.Region?>
+<?import javafx.scene.chart.LineChart?>
+<?import javafx.scene.chart.NumberAxis?>
+<?import javafx.scene.chart.CategoryAxis?>
 
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
@@ -37,8 +40,21 @@
             <Label fx:id="stageLabel" text="Sleep Stage: --"/>
         </VBox>
 
-        <!-- Right Column: Logs -->
+        <!-- Middle Column: Chart -->
         <VBox spacing="10" HBox.hgrow="ALWAYS" styleClass="card">
+             <Label text="Heart Rate History" style="-fx-font-weight: bold;"/>
+             <LineChart fx:id="hrChart" animated="false" createSymbols="false">
+                <xAxis>
+                    <CategoryAxis label="Time" />
+                </xAxis>
+                <yAxis>
+                    <NumberAxis label="BPM" autoRanging="false" lowerBound="40" upperBound="120" tickUnit="10"/>
+                </yAxis>
+            </LineChart>
+        </VBox>
+
+        <!-- Right Column: Logs -->
+        <VBox spacing="10" minWidth="300" styleClass="card">
             <Label text="System Logs & Analysis" style="-fx-font-weight: bold;"/>
             <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS" styleClass="text-area" wrapText="true"/>
         </VBox>

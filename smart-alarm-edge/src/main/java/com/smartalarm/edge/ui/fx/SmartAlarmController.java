@@ -11,7 +11,11 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.Region;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.XYChart;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +28,7 @@ public class SmartAlarmController {
     @FXML private Label stageLabel;
     @FXML private Label statusLabel;
     @FXML private Region statusIndicator;
+    @FXML private LineChart<String, Number> hrChart;
 
     private ScheduledExecutorService scheduler;
     private FitbitService fitbitService;
@@ -31,10 +36,18 @@ public class SmartAlarmController {
     private AzureService azureService;
     private DataStorageService storageService;
     private CloudSyncService cloudService;
+    private XYChart.Series<String, Number> hrSeries;
 
     public void initialize() {
         initializeServices();
+        initializeChart();
         startMonitoring();
+    }
+
+    private void initializeChart() {
+        hrSeries = new XYChart.Series<>();
+        hrSeries.setName("Heart Rate");
+        hrChart.getData().add(hrSeries);
     }
 
     private void initializeServices() {
@@ -50,7 +63,7 @@ public class SmartAlarmController {
         
         // Use environment variable for Cloud Service URL (Azure Container App)
         String cloudUrl = System.getenv("CLOUD_SERVICE_URL");
-        if (cloudUrl == null) cloudUrl = "http://localhost:8080"; // Fallback for local dev
+        if (cloudUrl == null) cloudUrl = "https://smart-alarm-cloud.grayforest-c8a2cdd5.northeurope.azurecontainerapps.io/predict"; 
         cloudService = new CloudSyncService(cloudUrl);
         
         try {
@@ -77,8 +90,8 @@ public class SmartAlarmController {
 
     private void startMonitoring() {
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Run every 30 seconds
-        scheduler.scheduleAtFixedRate(this::processCycle, 0, 30, TimeUnit.SECONDS);
+        // Run every 60 seconds to respect API limits
+        scheduler.scheduleAtFixedRate(this::processCycle, 0, 60, TimeUnit.SECONDS);
     }
 
     private void processCycle() {
@@ -96,6 +109,13 @@ public class SmartAlarmController {
             Platform.runLater(() -> {
                 hrLabel.setText(String.format("Heart Rate: %.1f bpm", data.heartRate()));
                 hrvLabel.setText(String.format("HRV (SDNN): %.1f ms", data.sdnn()));
+                
+                // Update Chart
+                String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+                hrSeries.getData().add(new XYChart.Data<>(time, data.heartRate()));
+                if (hrSeries.getData().size() > 20) {
+                    hrSeries.getData().remove(0);
+                }
             });
             
             // 2. Store Raw Data
