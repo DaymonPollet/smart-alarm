@@ -1,0 +1,158 @@
+.App {
+  min-height: 100vh;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  text-align: center;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 10px;
+}
+
+.config-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 15px 0;
+  font-size: 18px;
+}
+
+.status-enabled {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.status-disabled {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.btn:hover {
+  background-color: #0056b3;
+}
+
+.note {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #666;
+  font-style: italic;
+}
+
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.data-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.data-item .label {
+  font-weight: 600;
+  color: #555;
+}
+
+.data-item .value {
+  color: #007bff;
+  font-weight: bold;
+}
+
+.prediction-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.prediction-badge.wake {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.prediction-badge.light {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.prediction-badge.deep {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.prediction-badge.rem {
+  background-color: #e83e8c;
+  color: white;
+}
+
+.prediction-badge.unknown {
+  background-color: #6c757d;
+  color: white;
+}
+
+.chart-card {
+  min-height: 400px;
+}
+
+.history-table {
+  overflow-x: auto;
+}
+
+.history-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th,
+.history-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.history-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.history-table tr:hover {
+  background-color: #f8f9fa;
+}

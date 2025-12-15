@@ -3,20 +3,20 @@ version: '3.8'
 services:
   questdb:
     image: questdb/questdb:latest
-    container_name: questdb
+    container_name: smart-alarm-questdb
     ports:
       - "9000:9000"
+      - "9009:9009"
       - "8812:8812"
     volumes:
-      - questdb_data:/var/lib/questdb
+      - ./data/questdb:/var/lib/questdb
     restart: unless-stopped
 
-  model:
+  model-service:
     build: ./backend/python-model-service
     container_name: smart-alarm-model
     ports:
       - "5000:5000"
     restart: unless-stopped
-
-volumes:
-  questdb_data:
+    depends_on:
+      - questdb

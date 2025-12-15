@@ -1,0 +1,39 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: |
+        npm install
+    
+    - name: Build frontend
+      working-directory: ./frontend
+      env:
+        REACT_APP_API_URL: http://localhost:8080
+      run: |
+        npm run build
+    
+    - name: Deploy build
+      run: |
+        sudo rm -rf /var/www/smart-alarm || true
+        sudo mkdir -p /var/www/smart-alarm
+        sudo cp -r frontend/build/* /var/www/smart-alarm/
+        sudo chown -R www-data:www-data /var/www/smart-alarm

@@ -15,6 +15,10 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
+        // Start Web Server
+        com.smartalarm.edge.service.WebServerService webServer = new com.smartalarm.edge.service.WebServerService();
+        webServer.start();
+
         FXMLLoader fxmlLoader = new FXMLLoader(App.class.getResource("/view/smart-alarm.fxml"));
         Parent root = fxmlLoader.load();
         controller = fxmlLoader.getController();
@@ -36,6 +40,27 @@ public class App extends Application {
     }
 
     public static void main(String[] args) {
-        launch();
+        if (args.length > 0 && args[0].equals("--headless")) {
+            System.out.println("Starting in Headless Mode...");
+            // Initialize Context
+            com.smartalarm.edge.AppContext.getInstance();
+            
+            // Start Web Server
+            com.smartalarm.edge.service.WebServerService webServer = new com.smartalarm.edge.service.WebServerService();
+            webServer.start();
+            
+            // Start Monitoring
+            com.smartalarm.edge.service.MonitoringService monitor = new com.smartalarm.edge.service.MonitoringService(System.out::println);
+            monitor.start();
+            
+            // Keep alive
+            try {
+                Thread.currentThread().join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } else {
+            launch();
+        }
     }
 }

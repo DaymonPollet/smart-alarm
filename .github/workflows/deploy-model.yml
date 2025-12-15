@@ -1,0 +1,56 @@
+name: Deploy Local Model Service
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/python-model-service/**'
+      - '.github/workflows/deploy-model.yml'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      working-directory: ./backend/python-model-service
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Check if model exists
+      working-directory: ./backend/python-model-service
+      run: |
+        if [ ! -f model.joblib ]; then
+          echo "Training model..."
+          python train_model.py
+        fi
+    
+    - name: Build Docker image
+      working-directory: ./backend/python-model-service
+      run: |
+        docker build -t smart-alarm-model:latest .
+    
+    - name: Stop existing container
+      run: |
+        docker stop smart-alarm-model || true
+        docker rm smart-alarm-model || true
+    
+    - name: Run Docker container
+      run: |
+        docker run -d \
+          --name smart-alarm-model \
+          -p 5000:5000 \
+          --restart unless-stopped \
+          smart-alarm-model:latest
+    
+    - name: Verify deployment
+      run: |
+        sleep 5
+        curl -f http://localhost:5000/ || exit 1

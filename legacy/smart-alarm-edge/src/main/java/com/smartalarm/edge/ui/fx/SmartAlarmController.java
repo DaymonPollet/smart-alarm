@@ -52,19 +52,13 @@ public class SmartAlarmController {
 
     private void initializeServices() {
         log("Initializing services...");
-        fitbitService = new FitbitService();
-        // Use environment variable for Model Service URL or fallback to Pi NodePort
-        String modelUrl = System.getenv("MODEL_SERVICE_URL");
-        if (modelUrl == null) modelUrl = "http://192.168.137.11:30000/predict";
-        modelService = new LocalModelService(modelUrl);
+        com.smartalarm.edge.AppContext ctx = com.smartalarm.edge.AppContext.getInstance();
         
-        azureService = new AzureService(this::log);
-        storageService = new DataStorageService();
-        
-        // Use environment variable for Cloud Service URL (Azure Container App)
-        String cloudUrl = System.getenv("CLOUD_SERVICE_URL");
-        if (cloudUrl == null) cloudUrl = "https://smart-alarm-cloud.grayforest-c8a2cdd5.northeurope.azurecontainerapps.io/predict"; 
-        cloudService = new CloudSyncService(cloudUrl);
+        fitbitService = ctx.getFitbitService();
+        modelService = ctx.getLocalModelService();
+        azureService = ctx.getAzureService();
+        storageService = ctx.getDataStorageService();
+        cloudService = ctx.getCloudSyncService();
         
         try {
             azureService.connect();

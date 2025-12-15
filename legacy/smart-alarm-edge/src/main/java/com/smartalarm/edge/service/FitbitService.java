@@ -19,14 +19,14 @@ public class FitbitService {
     private static final String API_BASE = "https://api.fitbit.com";
     private final ObjectMapper mapper = new ObjectMapper();
     private final String accessToken;
-    private final boolean enabled;
+    private boolean enabled;
     private final Random random = new Random();
 
     public FitbitService() {
-        // Load from Environment Variables
+        // load env vars
         this.accessToken = System.getenv("FITBIT_ACCESS_TOKEN");
         String enableStr = System.getenv("ENABLE_FITBIT_API");
-        // Default to false to save rate limits unless explicitly enabled
+        // default false cuz i want to turn it on manually
         this.enabled = "true".equalsIgnoreCase(enableStr);
         
         if (this.enabled && (this.accessToken == null || this.accessToken.isEmpty())) {
@@ -34,8 +34,23 @@ public class FitbitService {
         }
     }
 
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     public FitbitPacket fetchLatestData() {
-        if (!enabled || accessToken == null) {
+        // Check time: Only query between 22:00 and 08:00
+        LocalTime now = LocalTime.now();
+        boolean isNight = now.isAfter(LocalTime.of(22, 0)) || now.isBefore(LocalTime.of(8, 0));
+
+        if (!enabled || accessToken == null || !isNight) {
+            if (enabled && !isNight) {
+                System.out.println("Fitbit API enabled but it's daytime. Skipping API call.");
+            }
             return fetchMockData();
         }
 
@@ -83,7 +98,7 @@ public class FitbitService {
         
         JsonNode hrDataset = hrNode.path("activities-heart-intraday").path("dataset");
         if (hrDataset.isArray()) {
-            // Get data for the last 60 seconds (approx 60 entries)
+            // get data for, last 60 seconds (approx 60 entries)
             int size = hrDataset.size();
             int start = Math.max(0, size - 60);
             

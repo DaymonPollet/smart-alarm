@@ -33,12 +33,9 @@ def predict():
             features = [
                 data.get("mean_hr", 0),
                 data.get("std_hr", 0),
-                data.get("sdnn", 0),
-                data.get("rmssd", 0),
                 data.get("min_hr", 0),
                 data.get("max_hr", 0),
-                data.get("mean_activity", 0),
-                data.get("std_activity", 0)
+                data.get("hrv_rmssd", 0)
             ]
         elif isinstance(data, list):
             features = data

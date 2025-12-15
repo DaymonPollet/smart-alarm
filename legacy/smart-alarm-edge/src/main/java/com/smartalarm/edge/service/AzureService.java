@@ -1,5 +1,6 @@
 package com.smartalarm.edge.service;
 
+import com.microsoft.azure.sdk.iot.device.exceptions.IotHubClientException;
 import com.smartalarm.edge.domain.SleepData;
 import com.microsoft.azure.sdk.iot.device.*;
 import com.microsoft.azure.sdk.iot.device.twin.*;
@@ -7,8 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.function.Consumer;
 
 public class AzureService {
@@ -30,8 +29,12 @@ public class AzureService {
 
     public void connect() throws IOException, URISyntaxException {
         client = new DeviceClient(connectionString, IotHubClientProtocol.MQTT);
-        client.open();
-        
+        try {
+            client.open(true);
+        } catch (IotHubClientException e) {
+            throw new RuntimeException(e);
+        }
+
         // Subscribe to Desired Properties updates
         client.subscribeToTwin(new TwinStatusCallBack(), null);
         client.startDeviceTwin(new DeviceTwinStatusCallBack(), null, new PropertyCallBack(), null);
