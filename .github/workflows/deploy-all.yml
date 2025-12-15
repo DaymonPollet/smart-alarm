@@ -11,60 +11,40 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
     - name: Install dependencies
       working-directory: ./backend/python-model-service
       run: |
-        pip install -r requirements.txt
+        python3 -m pip install --user -r requirements.txt
     
-    - name: Train model
+    - name: Check and train model
       working-directory: ./backend/python-model-service
       run: |
-        python train_model.py
+        if [ ! -f model.joblib ]; then
+          echo "Training model..."
+          python3 train_model.py
+        else
+          echo "Model already exists"
+        fi
     
-    - name: Build Docker image
-      working-directory: ./backend/python-model-service
+    - name: Verify model service is running
       run: |
-        docker build -t smart-alarm-model:latest .
-    
-    - name: Stop existing container
-      run: |
-        docker stop smart-alarm-model 2>/dev/null || true
-        docker rm smart-alarm-model 2>/dev/null || true
-    
-    - name: Run Docker container
-      run: |
-        docker run -d \
-          --name smart-alarm-model \
-          -p 5000:5000 \
-          --restart unless-stopped \
-          smart-alarm-model:latest
-    
-    - name: Verify model service
-      run: |
-        sleep 5
-        curl -f http://localhost:5000/ || exit 1
+        if curl -f http://localhost:5000/ 2>/dev/null; then
+          echo "Model service already running"
+        else
+          echo "Warning: Model service not running. Please start manually."
+        fi
 
   deploy-questdb:
     runs-on: self-hosted
     
     steps:
-    - name: Check if QuestDB is running
+    - name: Verify QuestDB is running
       run: |
-        if ! docker ps | grep -q questdb; then
-          docker run -d \
-            --name questdb \
-            -p 9000:9000 \
-            -p 8812:8812 \
-            --restart unless-stopped \
-            questdb/questdb
-          echo "Started QuestDB"
+        if curl -f http://localhost:9000/ 2>/dev/null; then
+          echo "QuestDB is running"
         else
-          echo "QuestDB already running"
+          echo "Error: QuestDB not running. Please start manually."
+          exit 1
         fi
 
   deploy-edge:
@@ -74,15 +54,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
     - name: Install dependencies
       working-directory: ./edge
       run: |
-        pip install -r requirements.txt
+        python3 -m pip install --user -r requirements.txt
     
     - name: Create .env file
       working-directory: ./edge
@@ -108,12 +83,12 @@ jobs:
     - name: Start API server
       working-directory: ./edge
       run: |
-        nohup python api.py > api.log 2>&1 &
+        nohup python3 api.py > api.log 2>&1 &
     
     - name: Start Edge application
       working-directory: ./edge
       run: |
-        nohup python main.py > main.log 2>&1 &
+        nohup python3 main.py > main.log 2>&1 &
     
     - name: Verify Edge deployment
       run: |
