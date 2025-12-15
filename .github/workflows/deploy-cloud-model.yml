@@ -42,8 +42,8 @@ jobs:
         docker build -t ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest .
         docker push ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest
     
-    - name: Update Azure Container App
-      if: secrets.AZURE_RESOURCE_GROUP != ''
+    - name: Deployment Summary
       run: |
-        echo "Manual update required: Use Azure Portal to update smart-alarm-cloud container"
+        echo "Docker image pushed to Docker Hub"
         echo "Image: ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest"
+        echo "Manual update required: Use Azure Portal to update smart-alarm-cloud container"
