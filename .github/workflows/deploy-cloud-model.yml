@@ -10,6 +10,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
     - uses: actions/checkout@v3
@@ -17,7 +18,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.10'
     
     - name: Install dependencies
       working-directory: ./backend/python-model-service
@@ -41,14 +42,8 @@ jobs:
         docker build -t ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest .
         docker push ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest
     
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-    
-    - name: Deploy to Azure Container Apps
+    - name: Update Azure Container App
+      if: secrets.AZURE_RESOURCE_GROUP != ''
       run: |
-        az containerapp update \
-          --name smart-alarm-model \
-          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-          --image ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest
+        echo "Manual update required: Use Azure Portal to update smart-alarm-cloud container"
+        echo "Image: ${{ secrets.DOCKER_USERNAME }}/smart-alarm-model:latest"
