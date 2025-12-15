@@ -1,311 +1,191 @@
-# Smart Sleep Alarm System
-A complete IoT-based smart alarm system that uses AI to determine the optimal wake-up time based on your sleep cycle data from Fitbit. The system analyzes heart rate variability (HRV), movement patterns, and sleep stages to wake you during light sleep, helping you feel more refreshed.
+# Smart Alarm
+
+A smart alarm system that monitors sleep stages using heart rate data from Fitbit and machine learning predictions.
+
+## Features
+
+- Real-time heart rate monitoring via Fitbit API
+- Machine learning model for sleep stage prediction (Awake, Deep Sleep, Light Sleep)
+- Web dashboard for monitoring and configuration
+- Automated alarm triggering based on optimal wake times
 
 ## Architecture
 
-This system consists of two main components:
+The application consists of three main components:
 
-### 1. **Cloud Component** (`cloud/fitbit_data_ferry.py`)
-- Pulls minute-level sleep data from Fitbit Web API
-- Fetches HRV, heart rate, and movement data
-- Processes and combines data into a unified format
-- Sends data to Azure IoT Hub using the Service SDK
+1. **Model Service** - Python ML service that predicts sleep stages from heart rate data
+2. **Backend API** - Flask API that handles Fitbit integration and data management
+3. **Frontend** - React web dashboard for monitoring and control
 
-### 2. **Edge Component** (`edge/rpi_smart_alarm.py`)
-- Runs on Raspberry Pi 5
-- Connects to Azure IoT Hub as a device
-- Receives sleep data via cloud-to-device messages
-- Runs AI model to analyze sleep stages
-- Triggers physical alarm at optimal wake-up time
-- Controls buzzer and LED indicators via GPIO
-
-## Data Flow
-
-```
-Fitbit API → Data Ferry (Cloud) → Azure IoT Hub → Raspberry Pi → AI Analysis → Smart Alarm
-```
-
-1. **Fitbit Data Ferry** fetches your sleep data from Fitbit's cloud
-2. Data is sent to **Azure IoT Hub** (cloud message broker)
-3. **Raspberry Pi** receives the data as a registered IoT device
-4. **AI Model** analyzes sleep stages and predicts optimal wake-up time
-5. **Physical Alarm** triggers during light sleep within your target window
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Fitbit account with developer app registered
-- Azure subscription with IoT Hub created
-- Raspberry Pi 5 (for edge deployment)
-- Hardware components (optional for testing):
-  - Buzzer/speaker
-  - LED indicator
-  - Breadboard and jumper wires
+- Node.js 14 or higher
+- Fitbit Developer account with registered application
 
-### Setup Instructions
+### Setup
 
-#### 1. Clone and Configure
+1. Clone the repository and navigate to the project directory
+
+2. Create a virtual environment:
+```powershell
+python -m venv .venv
+```
+
+3. Create a `.env` file in the root directory with your Fitbit credentials:
+```
+FITBIT_CLIENT_ID=your_client_id
+FITBIT_CLIENT_SECRET=your_client_secret
+FITBIT_REDIRECT_URI=http://127.0.0.1:8080/api/oauth/callback
+MODEL_SERVICE_URL=http://localhost:5000
+API_PORT=8080
+```
+
+4. Install Python dependencies:
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/local-api/requirements.txt
+pip install -r backend/python-model-service/requirements.txt
+```
+
+5. Install frontend dependencies:
+```powershell
+cd frontend
+npm install
+cd ..
+```
+
+### Running the Application
+
+Start all services with one command:
+```powershell
+.\start-all.ps1
+```
+
+This will launch:
+- Model Service on http://localhost:5000
+- Backend API on http://localhost:8080
+- Frontend on http://localhost:3000
+
+The frontend will automatically open in your browser.
+
+### Stopping the Application
 
 ```powershell
-# Clone the repository
-cd D:\Projects\smart-alarm
-
-# Copy the configuration template
-Copy-Item config\.env.template -Destination config\.env
-
-# Edit config\.env with your actual credentials
-notepad config\.env
-```
-
-#### 2. Set Up Fitbit API Access
-
-1. Go to [Fitbit Developer Portal](https://dev.fitbit.com/apps)
-2. Create a new application
-3. Set OAuth 2.0 Application Type to **Personal**
-4. Note your **Client ID** and **Client Secret**
-5. Generate OAuth tokens using Fitbit's OAuth flow
-6. Update `config\.env` with your credentials
-
-#### 3. Set Up Azure IoT Hub
-
-```powershell
-# Create Resource Group
-az group create --name smart-alarm-rg --location eastus
-
-# Create IoT Hub
-az iot hub create --name smart-alarm-hub --resource-group smart-alarm-rg --sku F1
-
-# Create Device Identity
-az iot hub device-identity create --hub-name smart-alarm-hub --device-id raspberrypi-alarm
-
-# Get IoT Hub connection string (for cloud component)
-az iot hub connection-string show --hub-name smart-alarm-hub --policy-name iothubowner
-
-# Get Device connection string (for Raspberry Pi)
-az iot hub device-identity connection-string show --hub-name smart-alarm-hub --device-id raspberrypi-alarm
-```
-
-Update `config\.env` with these connection strings.
-
-#### 4. Install Dependencies
-
-**For Cloud Component:**
-```powershell
-cd cloud
-pip install -r requirements.txt
-```
-
-**For Edge Component (on Raspberry Pi):**
-```bash
-cd edge
-pip install -r requirements.txt
-
-# If running on actual Raspberry Pi, also install:
-pip install RPi.GPIO
-```
-
-#### 5. Load Environment Variables
-
-**Windows (PowerShell):**
-```powershell
-# Load from config\.env file
-Get-Content config\.env | ForEach-Object {
-    if ($_ -match '^([^=]+)=(.*)$') {
-        [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
-    }
-}
-```
-
-**Linux/Raspberry Pi:**
-```bash
-export $(cat config/.env | xargs)
+.\stop-all.ps1
 ```
 
 ## Usage
 
-### Running the Cloud Data Ferry
+1. **Connect Fitbit**: Click "Connect Fitbit" in the dashboard and authorize the application
+2. **Fetch Data**: Use "Fetch Now" to manually retrieve heart rate data and get a prediction
+3. **Enable Monitoring**: Toggle monitoring to continuously track sleep stages
+4. **View Data**: Monitor real-time predictions and heart rate data in the dashboard
 
-```powershell
-cd cloud
-python fitbit_data_ferry.py
-```
+## Fitbit OAuth Setup
 
-This will:
-- Fetch your latest sleep data from Fitbit
-- Combine HRV, heart rate, and sleep stage data
-- Send it to your Raspberry Pi via Azure IoT Hub
+To connect your Fitbit account:
 
-### Running the Smart Alarm (Raspberry Pi)
+1. Register an application at https://dev.fitbit.com/apps
+2. Set the OAuth 2.0 Redirect URL to: `http://127.0.0.1:8080/api/oauth/callback`
+3. Request these scopes: activity, heartrate, sleep, profile
+4. Add your Client ID and Secret to the `.env` file
 
-```bash
-cd edge
-python rpi_smart_alarm.py
-```
+The application will automatically handle token refresh.
 
-This will:
-- Connect to Azure IoT Hub as a device
-- Listen for incoming sleep data
-- Analyze your sleep patterns with AI
-- Trigger the alarm during optimal light sleep
+## API Endpoints
 
-### Setting Alarm Time
+### Backend API (http://localhost:8080)
 
-```bash
-# Set via environment variable
-export ALARM_TIME="07:30"
+- `GET /api/health` - Health check
+- `GET /api/config` - Get application configuration
+- `GET /api/auth/login` - Start Fitbit OAuth flow
+- `GET /api/oauth/callback` - OAuth callback handler
+- `POST /api/fetch` - Fetch heart rate data and predict sleep stage
+- `GET /api/data` - Get stored predictions
+- `POST /api/predict` - Make prediction from provided data
 
-# Or update it remotely via IoT Hub Direct Method
-az iot hub invoke-device-method \
-  --hub-name smart-alarm-hub \
-  --device-id raspberrypi-alarm \
-  --method-name set_alarm \
-  --method-payload '{"alarm_time": "07:30"}'
-```
+### Model Service (http://localhost:5000)
 
-## AI Model Features
+- `GET /health` - Health check
+- `POST /predict` - Predict sleep stage from features
 
-The sleep stage predictor analyzes:
-
-- **Sleep Stages**: Identifies light, deep, REM, and wake periods
-- **Heart Rate Patterns**: Monitors resting heart rate during sleep
-- **HRV (Heart Rate Variability)**: Higher HRV indicates better recovery
-- **Sleep Quality Score**: Calculated based on deep sleep %, continuity, and HRV
-- **Optimal Wake Times**: Predicts best times to wake during light sleep
-
-### Sleep Quality Scoring 
-(may be adjusted later)
-
-- **70-100**: Excellent sleep quality
-- **50-69**: Good sleep quality
-- **30-49**: Fair sleep quality
-- **Below 30**: Poor sleep quality
-
-## Hardware Setup (Raspberry Pi)
-
-### GPIO Pinout
-
-```
-GPIO 18 (Pin 12) → Buzzer/Speaker (+)
-GPIO 23 (Pin 16) → LED (+) → 220Ω Resistor → LED (-)
-Ground (Pin 6)   → Buzzer (-) and LED common ground
-```
-
-### Wiring Diagram
-(Don't know how i'll use this)
-
-```
-    Raspberry Pi 5
-    ┌─────────────┐
-    │             │
-    │  GPIO 18 ───┼──→ Buzzer (+)
-    │             │
-    │  GPIO 23 ───┼──→ LED (+) ──[220Ω]─→ LED (-)
-    │             │                          │
-    │  GND ───────┼──────────────────────────┴→ Common Ground
-    │             │
-    └─────────────┘
-```
-
-## Remote Control via IoT Hub
-
-The Raspberry Pi supports direct methods for remote control:
-
-### Snooze Alarm
-```powershell
-az iot hub invoke-device-method `
-  --hub-name smart-alarm-hub `
-  --device-id raspberrypi-alarm `
-  --method-name snooze
-```
-
-### Stop Alarm
-```powershell
-az iot hub invoke-device-method `
-  --hub-name smart-alarm-hub `
-  --device-id raspberrypi-alarm `
-  --method-name stop_alarm
-```
-
-### Get Status
-```powershell
-az iot hub invoke-device-method `
-  --hub-name smart-alarm-hub `
-  --device-id raspberrypi-alarm `
-  --method-name get_status
-```
-
-## Project Structure (needs adjustment)
+## Project Structure
 
 ```
 smart-alarm/
-├── cloud/                      # Cloud components
-│   ├── fitbit_data_ferry.py   # Fitbit API to IoT Hub bridge
-│   └── requirements.txt        # Cloud dependencies
-├── edge/                       # Edge components
-│   ├── rpi_smart_alarm.py     # Raspberry Pi alarm controller
-│   └── requirements.txt        # Edge dependencies
-├── config/                     # Configuration
-│   └── .env.template          # Environment variable template
-├── .gitignore                 # Git ignore rules
-└── README.md                  # This file
+├── backend/
+│   ├── local-api/          # Flask API server
+│   └── python-model-service/ # ML model service
+├── frontend/               # React web dashboard
+├── data/                   # Training data
+├── .env                    # Environment configuration
+├── start-all.ps1          # Startup script
+└── stop-all.ps1           # Shutdown script
 ```
 
-##  Security Best Practices
+## Development
 
-1. **Never commit `.env` file** to version control
-2. **Use Azure Key Vault** for production deployments
-3. **Rotate credentials regularly**
-4. **Use device provisioning service** for fleet management
-5. **Enable IoT Hub monitoring** and alerts
+### Training the Model
+
+```powershell
+cd backend/python-model-service
+python train_model.py
+```
+
+This will create `model.joblib` with the trained classifier.
+
+### Running Individual Services
+
+Model Service:
+```powershell
+cd backend/python-model-service
+python app.py
+```
+
+Backend API:
+```powershell
+cd backend/local-api
+python app.py
+```
+
+Frontend:
+```powershell
+cd frontend
+npm start
+```
 
 ## Troubleshooting
 
-### Cloud Component Issues
+### Fitbit Connection Issues
 
-**Problem**: `fitbit` module import error
+If you get "invalid_request - Invalid redirect_uri parameter value":
+- Ensure `FITBIT_REDIRECT_URI` in `.env` matches exactly what is registered in your Fitbit app
+- Check that the backend API is running on port 8080
+- Verify the route is `/api/oauth/callback` not just `/callback`
+
+### Port Already in Use
+
+If services fail to start due to port conflicts:
+- Model Service: Change port in `backend/python-model-service/app.py`
+- Backend API: Change `API_PORT` in `.env`
+- Frontend: Change port in `frontend/package.json` or set `PORT` environment variable
+
+### Module Not Found
+
+Ensure the virtual environment is activated:
 ```powershell
-pip install fitbit
+.\.venv\Scripts\Activate.ps1
 ```
 
-**Problem**: Azure authentication fails
-- Verify your IoT Hub connection string is correct
-- Ensure it has `iothubowner` permissions
-
-### Edge Component Issues
-
-**Problem**: Cannot connect to IoT Hub
-- Check device connection string
-- Verify device is registered in IoT Hub
-- Check network connectivity
-
-**Problem**: No sleep data received
-- Ensure cloud component is running and sending data
-- Check IoT Hub message routing
-- Verify device ID matches in both components
-
-## Future Enhancements
-
-- [ ] Machine learning model training on personal sleep data
-- [ ] Mobile app for configuration and monitoring
-- [ ] Integration with additional wearables (Apple Watch, Garmin, and ofcourse my Fitbit)
-- [ ] Weather-aware wake-up adjustments
-- [ ] Gradual light/sound alarm (sunrise simulation)
-- [ ] Sleep report generation and trends
-- [ ] Multi-user support for couples / non-IT'ers
+Then reinstall dependencies:
+```powershell
+pip install -r backend/local-api/requirements.txt
+pip install -r backend/python-model-service/requirements.txt
+```
 
 ## License
 
-Proprietary License of Daymon Pollet and no one else.
-## Contributing
-
-Me, myself, and I
-
-## Support
-
-For issues or questions, please check the troubleshooting section above.
-
----
-
-**Built Python, Azure IoT Hub, Fitbit API, and Raspberry Pi, maybe gonne do it in a better language like Java soon**
+This project is for educational purposes.
