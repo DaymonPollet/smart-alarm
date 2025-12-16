@@ -1,0 +1,37 @@
+/* ProbabilityBars Component Styles */
+.probability-bars {
+  margin-top: 15px;
+}
+
+.prob-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.prob-label {
+  width: 80px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.prob-bar-container {
+  flex: 1;
+  height: 24px;
+  background: #e9ecef;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0 10px;
+}
+
+.prob-bar {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+}
+
+.prob-value {
+  width: 60px;
+  text-align: right;
+  font-weight: 600;
+}

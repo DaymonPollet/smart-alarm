@@ -1,13 +1,16 @@
 """
 Smart Alarm Local API
 Handles Fitbit OAuth, data fetching, local predictions, Azure cloud predictions,
-MQTT messaging, and SQLite fallback storage.
+MQTT messaging, SQLite fallback storage, and smart alarm functionality.
 
 Architecture:
 - Local Model: Random Forest Regression (predicts overall_score 0-100)
 - Cloud Model: Random Forest Classifier (predicts quality class: Poor/Fair/Good)
 - MQTT: Publishes predictions to IoT broker for edge device consumption
 - SQLite: Stores predictions locally when Azure is unavailable
+- Application Insights: Logs predictions to Azure cloud storage
+- Alarm: Smart wake-up based on sleep stage within configurable window
+- Background fetch: Periodic Fitbit data polling for real-time alarm decisions
 """
 
 from flask import Flask, request, jsonify
@@ -15,15 +18,18 @@ from flask_cors import CORS
 from datetime import datetime
 from urllib.parse import urlencode
 import json
+import threading
+import time
 
 from services.config import (
     config_store, data_store,
     FITBIT_CLIENT_ID, FITBIT_REDIRECT_URI,
-    MQTT_TOPIC_PREDICTIONS, DB_PATH
+    MQTT_TOPIC_PREDICTIONS, MQTT_TOPIC_ALERTS, DB_PATH
 )
 from services.database import (
     init_database, save_prediction_to_db,
-    get_pending_sync_items, mark_synced
+    get_pending_sync_items, mark_synced, get_pending_count,
+    save_alarm_event, get_alarm_history
 )
 from services.mqtt_service import (
     init_mqtt, publish_mqtt, get_mqtt_client
@@ -41,14 +47,102 @@ from services.feature_extractor import (
     extract_features_for_local_model, extract_features_for_cloud_model,
     update_lag_features, update_cloud_lag_features, get_sleep_type_info
 )
+from services.insights_service import init_insights, log_prediction_to_cloud
+from services.alarm_service import (
+    set_alarm, disable_alarm, dismiss_alarm, snooze_alarm,
+    check_alarm_trigger, get_alarm_status, alarm_config
+)
 
 app = Flask(__name__)
 CORS(app)
 
 init_database()
 init_mqtt()
+init_insights()
 load_local_model()
 
+background_fetch_thread = None
+stop_background_fetch = False
+last_fetch_result = {}
+
+def background_fetch_loop():
+    global stop_background_fetch, last_fetch_result
+    
+    while not stop_background_fetch:
+        if config_store.get('fitbit_connected') and alarm_config.get('enabled') and not alarm_config.get('triggered'):
+            try:
+                sleep_data = fetch_sleep()
+                hr_data = fetch_heart_rate()
+                
+                session = None
+                if sleep_data and 'sleep' in sleep_data:
+                    sessions = sleep_data.get('sleep', [])
+                    if sessions:
+                        session = sessions[-1]
+                
+                if session:
+                    local_features = extract_features_for_local_model(session, hr_data, None)
+                    local_result = predict_local(local_features)
+                    
+                    is_light = local_result.get('quality', '').lower() in ['fair', 'poor']
+                    sleep_quality = local_result.get('quality')
+                    sleep_score = local_result.get('score')
+                    
+                    last_fetch_result = {
+                        'timestamp': datetime.now().isoformat(),
+                        'quality': sleep_quality,
+                        'score': sleep_score,
+                        'is_light_sleep': is_light
+                    }
+                    
+                    alarm_status = get_alarm_status()
+                    if alarm_status.get('in_window'):
+                        trigger_result = check_alarm_trigger(sleep_quality, is_light)
+                        
+                        if trigger_result and trigger_result.get('trigger'):
+                            save_alarm_event(
+                                event_type='triggered',
+                                trigger_reason=trigger_result.get('reason'),
+                                scheduled_time=alarm_config.get('wake_time'),
+                                sleep_quality=sleep_quality,
+                                sleep_score=sleep_score,
+                                window_minutes=alarm_config.get('window_minutes')
+                            )
+                            
+                            mqtt_client = get_mqtt_client()
+                            if mqtt_client:
+                                publish_mqtt(MQTT_TOPIC_ALERTS, {
+                                    'type': 'alarm_triggered',
+                                    'reason': trigger_result.get('reason'),
+                                    'time': trigger_result.get('time'),
+                                    'quality': sleep_quality,
+                                    'score': sleep_score
+                                })
+                            
+                            print(f"[ALARM] Triggered: {trigger_result.get('reason')} - Quality: {sleep_quality}")
+                    
+                    print(f"[BGFETCH] Quality: {sleep_quality}, Score: {sleep_score:.1f}, Light: {is_light}")
+                    
+            except Exception as e:
+                print(f"[BGFETCH] Error: {e}")
+        
+        time.sleep(90)
+
+def start_background_fetch():
+    global background_fetch_thread, stop_background_fetch
+    
+    if background_fetch_thread and background_fetch_thread.is_alive():
+        return
+    
+    stop_background_fetch = False
+    background_fetch_thread = threading.Thread(target=background_fetch_loop, daemon=True)
+    background_fetch_thread.start()
+    print("[BGFETCH] Background fetch started (90s interval)")
+
+def stop_background_fetch_thread():
+    global stop_background_fetch
+    stop_background_fetch = True
+    print("[BGFETCH] Background fetch stopped")
 
 @app.route('/', methods=['GET'])
 def root_handler():
@@ -95,7 +189,35 @@ def fitbit_login():
 def config():
     if request.method == 'POST':
         data = request.get_json()
-        config_store.update(data)
+        
+        if 'cloud_enabled' in data:
+            config_store['cloud_enabled'] = data['cloud_enabled']
+            
+            if data['cloud_enabled']:
+                pending = get_pending_sync_items()
+                if pending:
+                    synced = 0
+                    for item in pending:
+                        sync_id, prediction_id, payload = item
+                        pred_data = json.loads(payload)
+                        cloud_features = extract_features_for_cloud_model(
+                            {'minutesAsleep': pred_data.get('minutes_asleep', 0)},
+                            None, None, None
+                        )
+                        result = predict_cloud(cloud_features)
+                        if result:
+                            mark_synced(prediction_id)
+                            log_prediction_to_cloud({**pred_data, **result})
+                            synced += 1
+                    config_store['pending_sync_count'] = get_pending_count()
+                    print(f"[SYNC] Synced {synced} pending predictions")
+        else:
+            for key in ['monitoring_active']:
+                if key in data:
+                    config_store[key] = data[key]
+    
+    config_store['pending_sync_count'] = get_pending_count()
+    config_store['alarm'] = get_alarm_status()
     return jsonify(config_store)
 
 
@@ -161,7 +283,10 @@ def fetch_and_predict():
               f"steps={cloud_features.get('TotalSteps', 0)}")
         
         local_result = predict_local(local_features)
-        cloud_result = predict_cloud(cloud_features)
+        
+        cloud_result = None
+        if config_store.get('cloud_enabled', True):
+            cloud_result = predict_cloud(cloud_features)
         
         update_lag_features(
             local_result.get('score'),
@@ -209,10 +334,11 @@ def fetch_and_predict():
         }
         
         save_prediction_to_db(prediction)
+        log_prediction_to_cloud(prediction)
         data_store.insert(0, prediction)
         
         mqtt_client = get_mqtt_client()
-        if mqtt_client and config_store.get('mqtt_connected'):
+        if mqtt_client:
             publish_mqtt(MQTT_TOPIC_PREDICTIONS, {
                 'timestamp': prediction['timestamp'],
                 'quality': prediction['quality'],
@@ -349,6 +475,159 @@ def stop_monitoring():
     return jsonify({"status": "Monitoring stopped", "monitoring_active": False})
 
 
+@app.route('/api/alarm', methods=['GET', 'POST', 'DELETE'])
+def alarm_endpoint():
+    if request.method == 'GET':
+        status = get_alarm_status()
+        status['last_fetch'] = last_fetch_result
+        return jsonify(status)
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        wake_time = data.get('wake_time')
+        window_minutes = data.get('window_minutes', 30)
+        
+        if not wake_time:
+            return jsonify({"error": "wake_time required (HH:MM format)"}), 400
+        
+        if set_alarm(wake_time, window_minutes):
+            save_alarm_event(
+                event_type='set',
+                scheduled_time=wake_time,
+                window_minutes=window_minutes
+            )
+            
+            start_background_fetch()
+            
+            status = get_alarm_status()
+            
+            mqtt_client = get_mqtt_client()
+            if mqtt_client:
+                publish_mqtt(MQTT_TOPIC_ALERTS, {
+                    'type': 'alarm_set',
+                    'wake_time': wake_time,
+                    'window_minutes': window_minutes
+                })
+            
+            return jsonify({"status": "Alarm set", **status})
+        return jsonify({"error": "Invalid time format. Use HH:MM"}), 400
+    
+    elif request.method == 'DELETE':
+        disable_alarm()
+        stop_background_fetch_thread()
+        save_alarm_event(event_type='disabled')
+        return jsonify({"status": "Alarm disabled"})
+
+
+@app.route('/api/alarm/snooze', methods=['POST'])
+def alarm_snooze():
+    data = request.get_json() or {}
+    minutes = data.get('minutes', 9)
+    new_time = snooze_alarm(minutes)
+    
+    if new_time:
+        save_alarm_event(
+            event_type='snoozed',
+            scheduled_time=new_time
+        )
+        
+        mqtt_client = get_mqtt_client()
+        if mqtt_client:
+            publish_mqtt(MQTT_TOPIC_ALERTS, {
+                'type': 'alarm_snoozed',
+                'new_wake_time': new_time
+            })
+        return jsonify({"status": "Alarm snoozed", "new_wake_time": new_time})
+    return jsonify({"error": "No active alarm to snooze"}), 400
+
+
+@app.route('/api/alarm/dismiss', methods=['POST'])
+def alarm_dismiss():
+    save_alarm_event(event_type='dismissed')
+    dismiss_alarm()
+    
+    mqtt_client = get_mqtt_client()
+    if mqtt_client:
+        publish_mqtt(MQTT_TOPIC_ALERTS, {'type': 'alarm_dismissed'})
+    
+    return jsonify({"status": "Alarm dismissed"})
+
+
+@app.route('/api/alarm/history', methods=['GET'])
+def alarm_history():
+    limit = request.args.get('limit', 50, type=int)
+    history = get_alarm_history(limit)
+    return jsonify(history)
+
+
+@app.route('/api/alarm/check', methods=['POST'])
+def alarm_check():
+    data = request.get_json() or {}
+    sleep_quality = data.get('sleep_quality')
+    is_light_sleep = data.get('is_light_sleep', False)
+    
+    result = check_alarm_trigger(sleep_quality, is_light_sleep)
+    
+    if result and result.get('trigger'):
+        save_alarm_event(
+            event_type='triggered',
+            trigger_reason=result.get('reason'),
+            scheduled_time=alarm_config.get('wake_time'),
+            sleep_quality=sleep_quality,
+            window_minutes=alarm_config.get('window_minutes')
+        )
+        
+        mqtt_client = get_mqtt_client()
+        if mqtt_client:
+            publish_mqtt(MQTT_TOPIC_ALERTS, {
+                'type': 'alarm_triggered',
+                'reason': result.get('reason'),
+                'time': result.get('time')
+            })
+        return jsonify({"alarm_triggered": True, **result})
+    
+    return jsonify({"alarm_triggered": False, "status": get_alarm_status()})
+
+
+@app.route('/api/cloud/toggle', methods=['POST'])
+def toggle_cloud():
+    data = request.get_json() or {}
+    enabled = data.get('enabled')
+    
+    if enabled is None:
+        config_store['cloud_enabled'] = not config_store.get('cloud_enabled', True)
+    else:
+        config_store['cloud_enabled'] = bool(enabled)
+    
+    if config_store['cloud_enabled']:
+        pending = get_pending_sync_items()
+        synced = 0
+        for item in pending:
+            sync_id, prediction_id, payload = item
+            pred_data = json.loads(payload)
+            cloud_features = extract_features_for_cloud_model(
+                {'minutesAsleep': pred_data.get('minutes_asleep', 0)},
+                None, None, None
+            )
+            result = predict_cloud(cloud_features)
+            if result:
+                mark_synced(prediction_id)
+                log_prediction_to_cloud({**pred_data, **result})
+                synced += 1
+        
+        config_store['pending_sync_count'] = get_pending_count()
+        return jsonify({
+            "cloud_enabled": True,
+            "synced": synced,
+            "pending_remaining": config_store['pending_sync_count']
+        })
+    
+    return jsonify({
+        "cloud_enabled": False,
+        "pending_count": get_pending_count()
+    })
+
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
@@ -356,7 +635,9 @@ def health():
         "local_model_loaded": get_local_model() is not None,
         "fitbit_connected": config_store.get('fitbit_connected', False),
         "azure_available": config_store.get('azure_available', False),
-        "mqtt_connected": config_store.get('mqtt_connected', False)
+        "cloud_enabled": config_store.get('cloud_enabled', True),
+        "mqtt_connected": config_store.get('mqtt_connected', False),
+        "pending_sync": get_pending_count()
     })
 
 

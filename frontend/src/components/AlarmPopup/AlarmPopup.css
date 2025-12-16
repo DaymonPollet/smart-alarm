@@ -1,0 +1,100 @@
+/* AlarmPopup Component Styles */
+.alarm-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.alarm-popup {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+  color: white;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: popIn 0.4s ease-out;
+  max-width: 400px;
+  width: 90%;
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.alarm-popup h2 {
+  font-size: 2.5rem;
+  margin: 0 0 10px 0;
+  border: none;
+  color: white;
+}
+
+.alarm-popup .alarm-message {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 10px 0;
+}
+
+.alarm-popup .alarm-time {
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 20px 0;
+}
+
+.alarm-buttons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 25px;
+}
+
+.alarm-buttons .btn {
+  padding: 15px 30px;
+  font-size: 1.1rem;
+  border-radius: 30px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.alarm-buttons .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+.alarm-buttons .btn-warning {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.alarm-buttons .btn-warning:hover {
+  background-color: #e0a800;
+}
+
+.alarm-buttons .btn-success {
+  background-color: #28a745;
+  color: white;
+}
+
+.alarm-buttons .btn-success:hover {
+  background-color: #218838;
+}

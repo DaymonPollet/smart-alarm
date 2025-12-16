@@ -29,7 +29,8 @@ for file_name in files_to_deploy:
         shutil.copy(file_name, os.path.join(DEPLOY_FOLDER, file_name))
     else:
         print(f"Warning: Required file not found: {file_name}")
-        
+
+# this conda yaml content is here cuz it wouldn't work with the deployment asset        
 conda_yaml_content = """
 name: sleep-classifier-env
 channels:

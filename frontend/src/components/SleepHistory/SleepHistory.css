@@ -1,0 +1,38 @@
+/* SleepHistory Component Styles */
+.history-table {
+  overflow-x: auto;
+}
+
+.history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.history-table th,
+.history-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.history-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.85rem;
+}
+
+.history-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.history-table .main-sleep {
+  background-color: #f0f7ff;
+}
+
+@media (max-width: 768px) {
+  .history-table {
+    font-size: 0.8rem;
+  }
+}

@@ -14,6 +14,8 @@ FITBIT_REFRESH_TOKEN = os.getenv('FITBIT_REFRESH_TOKEN', '')
 AZURE_ENDPOINT_URL = os.getenv('AZURE_ENDPOINT_URL', '')
 AZURE_ENDPOINT_KEY = os.getenv('AZURE_ENDPOINT_KEY', '')
 
+APPINSIGHTS_CONNECTION_STRING = os.getenv('APPINSIGHTS_CONNECTION_STRING', '')
+
 MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')
 MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
 MQTT_TOPIC_PREDICTIONS = os.getenv('MQTT_TOPIC_PREDICTIONS', 'smart-alarm/predictions')
@@ -27,7 +29,10 @@ config_store = {
     'fitbit_connected': bool(FITBIT_ACCESS_TOKEN and FITBIT_ACCESS_TOKEN != ''),
     'monitoring_active': False,
     'azure_available': bool(AZURE_ENDPOINT_URL),
-    'mqtt_connected': False
+    'cloud_enabled': True,
+    'mqtt_connected': False,
+    'insights_connected': False,
+    'pending_sync_count': 0
 }
 
 lag_features = {

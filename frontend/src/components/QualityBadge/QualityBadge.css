@@ -1,0 +1,30 @@
+/* QualityBadge Component Styles */
+.quality-badge {
+  display: inline-block;
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.quality-badge--small {
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.8em;
+}
+
+.quality-badge--medium {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.9em;
+}
+
+.quality-badge--large {
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 1em;
+}
+
+.quality-badge__label {
+  font-weight: normal;
+  text-transform: none;
+}

@@ -1,0 +1,33 @@
+/* StatusBadge Component Styles */
+.status-item {
+  text-align: center;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.status-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.status-indicator {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-indicator.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-indicator.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}

@@ -1,0 +1,55 @@
+/* Card Component Styles */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 10px;
+  font-size: 1.3rem;
+}
+
+.card h3 {
+  color: #555;
+  font-size: 1rem;
+  margin: 10px 0 5px 0;
+}
+
+/* Card Variants */
+.card--status {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.card--alarm h2 {
+  border-bottom-color: #ffc107;
+}
+
+.card--cloud h2 {
+  border-bottom-color: #17a2b8;
+}
+
+.card--chart {
+  min-height: 350px;
+}
+
+.card--alert {
+  border: 2px solid #17a2b8;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.card--alert h2 {
+  color: white;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.card--alert p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+}

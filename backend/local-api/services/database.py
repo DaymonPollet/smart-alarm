@@ -1,5 +1,6 @@
 import sqlite3
 import json
+from datetime import datetime
 from .config import DB_PATH
 
 def init_database():
@@ -39,9 +40,53 @@ def init_database():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS alarm_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            trigger_reason TEXT,
+            scheduled_time TEXT,
+            actual_time TEXT NOT NULL,
+            sleep_quality TEXT,
+            sleep_score REAL,
+            window_minutes INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     conn.commit()
     conn.close()
     print("[DB] Database initialized")
+
+def save_alarm_event(event_type, trigger_reason=None, scheduled_time=None, sleep_quality=None, sleep_score=None, window_minutes=None):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO alarm_events 
+        (event_type, trigger_reason, scheduled_time, actual_time, sleep_quality, sleep_score, window_minutes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        event_type,
+        trigger_reason,
+        scheduled_time,
+        datetime.now().isoformat(),
+        sleep_quality,
+        sleep_score,
+        window_minutes
+    ))
+    
+    conn.commit()
+    conn.close()
+
+def get_alarm_history(limit=50):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM alarm_events ORDER BY created_at DESC LIMIT ?', (limit,))
+    columns = [desc[0] for desc in cursor.description]
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(zip(columns, row)) for row in rows]
 
 def save_prediction_to_db(prediction_data):
     conn = sqlite3.connect(DB_PATH)
@@ -100,3 +145,11 @@ def mark_synced(prediction_id):
     cursor.execute('DELETE FROM pending_sync WHERE prediction_id = ?', (prediction_id,))
     conn.commit()
     conn.close()
+
+def get_pending_count():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM pending_sync')
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
