@@ -6,7 +6,6 @@ import json
 from datetime import datetime
 from .config import AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER
 
-# Initialize blob client
 blob_service_client = None
 container_client = None
 
@@ -23,7 +22,6 @@ def init_blob_storage():
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(AZURE_STORAGE_CONTAINER)
         
-        # Create container if it doesn't exist
         try:
             container_client.create_container()
             print(f"[BLOB] Created container: {AZURE_STORAGE_CONTAINER}")
@@ -57,12 +55,10 @@ def store_prediction(prediction_data: dict) -> bool:
         return False
     
     try:
-        # Create blob name with date partitioning
         timestamp = prediction_data.get('timestamp', datetime.now().isoformat())
-        date_prefix = timestamp[:10].replace('-', '/')  # YYYY/MM/DD
+        date_prefix = timestamp[:10].replace('-', '/')  
         blob_name = f"predictions/{date_prefix}/{timestamp.replace(':', '-')}.json"
         
-        # Upload as JSON
         blob_client = container_client.get_blob_client(blob_name)
         blob_client.upload_blob(
             json.dumps(prediction_data, indent=2),
