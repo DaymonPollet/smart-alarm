@@ -71,7 +71,7 @@ jobs:
 
   deploy:
     needs: [build-backend, build-frontend]
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, linux, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -99,11 +99,17 @@ jobs:
           kubectl apply -f k8s/base/configmap.yaml
           kubectl apply -f k8s/base/storage.yaml
 
+      - name: Copy model files
+        run: |
+          sudo cp local_model/*.pkl /data/smart-alarm/model/
+          sudo chown -R 1000:1000 /data/smart-alarm/model
+
       - name: Deploy backend
         run: |
           sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g; s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
             k8s/base/backend-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/base/backend-service.yaml
+          kubectl rollout restart deployment/smart-alarm-backend -n ${{ env.NAMESPACE }}
 
       - name: Deploy frontend
         run: |
