@@ -71,7 +71,7 @@ jobs:
 
   deploy:
     needs: [build-backend, build-frontend]
-    runs-on: [self-hosted, pi]
+    runs-on: [self-hosted, Linux, ARM64]
     steps:
       - uses: actions/checkout@v4
 
