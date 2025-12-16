@@ -1,0 +1,94 @@
+# Backend Deployment - Stable version
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smart-alarm-backend
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-backend
+    version: stable
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: smart-alarm-backend
+      version: stable
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: smart-alarm-backend
+        version: stable
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: backend
+          image: ${DOCKER_REGISTRY}/smart-alarm-backend:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: smart-alarm-config
+            - secretRef:
+                name: smart-alarm-secrets
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DEPLOYMENT_VERSION
+              value: "stable"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: model
+              mountPath: /app/local_model
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: smart-alarm-data
+        - name: model
+          persistentVolumeClaim:
+            claimName: smart-alarm-model
+      # Affinity for Raspberry Pi (ARM64)
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      tolerations:
+        - key: "arm"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"

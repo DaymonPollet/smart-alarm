@@ -1,0 +1,47 @@
+# Ingress for Smart Alarm (optional - for domain-based access)
+# Uses nginx-ingress controller
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smart-alarm-ingress
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    # Canary annotations (enable when doing canary deployment)
+    # nginx.ingress.kubernetes.io/canary: "true"
+    # nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  ingressClassName: nginx
+  rules:
+    # Access via IP or hostname
+    - host: smart-alarm.local
+      http:
+        paths:
+          # Frontend routes
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smart-alarm-frontend
+                port:
+                  number: 80
+          # Backend API routes
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: smart-alarm-backend
+                port:
+                  number: 8080
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: smart-alarm-backend
+                port:
+                  number: 8080

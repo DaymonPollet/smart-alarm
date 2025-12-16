@@ -1,0 +1,8 @@
+# Namespace for Smart Alarm application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smart-alarm
+  labels:
+    app: smart-alarm
+    environment: production

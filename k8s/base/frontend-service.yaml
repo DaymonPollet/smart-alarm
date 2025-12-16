@@ -1,0 +1,60 @@
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-frontend
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-frontend
+    tier: frontend
+spec:
+  type: NodePort
+  selector:
+    app: smart-alarm-frontend
+    # Note: No version selector - routes to both stable and canary
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30080  # Accessible at Pi-IP:30080
+      protocol: TCP
+
+---
+# Frontend Service - Stable only
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-frontend-stable
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-frontend
+    version: stable
+spec:
+  type: ClusterIP
+  selector:
+    app: smart-alarm-frontend
+    version: stable
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+# Frontend Service - Canary only
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-frontend-canary
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-frontend
+    version: canary
+spec:
+  type: ClusterIP
+  selector:
+    app: smart-alarm-frontend
+    version: canary
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

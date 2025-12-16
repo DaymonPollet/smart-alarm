@@ -1,0 +1,53 @@
+# Canary Traffic Split Configuration
+# Uses weighted services to split traffic between stable and canary
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-backend-weighted
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-backend
+  annotations:
+    # Nginx ingress annotation for traffic splitting
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  selector:
+    app: smart-alarm-backend
+    # No version selector - routes to all pods
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+---
+# Canary Ingress for weighted traffic routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smart-alarm-canary
+  namespace: smart-alarm
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  rules:
+    - host: smart-alarm.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: smart-alarm-backend-canary
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smart-alarm-frontend-canary
+                port:
+                  number: 80

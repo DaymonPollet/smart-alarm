@@ -1,0 +1,29 @@
+# Kustomization for base deployment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: smart-alarm
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - storage.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - ingress.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: smart-alarm
+  app.kubernetes.io/managed-by: kustomize
+
+# Images will be replaced by CI/CD
+images:
+  - name: ${DOCKER_REGISTRY}/smart-alarm-backend
+    newName: daymonpollet/smart-alarm-backend
+    newTag: latest
+  - name: ${DOCKER_REGISTRY}/smart-alarm-frontend
+    newName: daymonpollet/smart-alarm-frontend
+    newTag: latest

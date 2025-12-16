@@ -1,0 +1,86 @@
+# Persistent storage for Smart Alarm
+# Uses local hostPath on Raspberry Pi for SQLite database
+
+---
+# StorageClass for local storage on Pi
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+# PersistentVolume - local storage on Raspberry Pi
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: smart-alarm-pv
+  labels:
+    app: smart-alarm
+    type: local
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/smart-alarm
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim for the application
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smart-alarm-data
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# PersistentVolume for ML model files
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: smart-alarm-model-pv
+  labels:
+    app: smart-alarm
+    type: model
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/smart-alarm/model
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim for ML model
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smart-alarm-model
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Mi

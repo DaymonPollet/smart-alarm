@@ -1,0 +1,30 @@
+# Development/build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Database (will be volume mounted)
+*.db
+
+# Logs
+*.log
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Documentation
+*.md
+docs/

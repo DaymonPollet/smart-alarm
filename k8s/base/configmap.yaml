@@ -1,0 +1,25 @@
+# ConfigMap for Smart Alarm application
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smart-alarm-config
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm
+data:
+  # API Configuration
+  API_PORT: "8080"
+  FLASK_ENV: "production"
+  
+  # MQTT Configuration (HiveMQ public broker)
+  MQTT_BROKER: "broker.hivemq.com"
+  MQTT_PORT: "1883"
+  MQTT_TOPIC_BASE: "howest/smartalarm/daymon"
+  
+  # Storage paths
+  DB_PATH: "/data/sleep_data.db"
+  MODEL_PATH: "/app/local_model"
+  
+  # Feature flags
+  CLOUD_ENABLED: "true"
+  LOCAL_MODEL_ENABLED: "true"

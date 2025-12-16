@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output (we build in Docker)
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test files
+coverage/
+*.test.js
+
+# Documentation
+*.md

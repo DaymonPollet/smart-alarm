@@ -130,17 +130,14 @@ def run(raw_data):
                 }
                 df[col] = defaults.get(col, 0)
         
-        # Select and order features
         X = df[feature_columns]
         
-        # Apply imputer if available
         if imputer is not None:
             X = imputer.transform(X)
         
-        # Make predictions
         predictions = model.predict(X)
         
-        # Get probabilities if available
+        # get probabilities for a more detailed resposne
         try:
             probabilities = model.predict_proba(X)
             confidence = np.max(probabilities, axis=1)
@@ -148,13 +145,13 @@ def run(raw_data):
             probabilities = None
             confidence = [1.0] * len(predictions)
         
-        # Decode labels if encoder exists
+        # Decode labels if encoder exists (should be here tho)
         if label_encoder is not None:
             decoded_predictions = label_encoder.inverse_transform(predictions)
         else:
             decoded_predictions = predictions
         
-        # Format response
+        # formating of response
         results = []
         for i, pred in enumerate(decoded_predictions):
             result = {
@@ -162,7 +159,7 @@ def run(raw_data):
                 'confidence': float(confidence[i])
             }
             
-            # Add probabilities per class if available
+            # us probability distribution if available so we can add a score to each class
             if probabilities is not None:
                 if label_encoder is not None:
                     class_probs = {

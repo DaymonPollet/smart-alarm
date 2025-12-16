@@ -1,0 +1,59 @@
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-backend
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-backend
+    tier: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: smart-alarm-backend
+    # Note: No version selector - routes to both stable and canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Backend Service - Stable only (for testing)
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-backend-stable
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-backend
+    version: stable
+spec:
+  type: ClusterIP
+  selector:
+    app: smart-alarm-backend
+    version: stable
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+
+---
+# Backend Service - Canary only (for testing)
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-alarm-backend-canary
+  namespace: smart-alarm
+  labels:
+    app: smart-alarm-backend
+    version: canary
+spec:
+  type: ClusterIP
+  selector:
+    app: smart-alarm-backend
+    version: canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

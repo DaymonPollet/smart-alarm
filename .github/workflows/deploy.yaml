@@ -1,0 +1,290 @@
+# Deploy to Raspberry Pi Kubernetes
+name: Deploy to Pi
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Deployment strategy'
+        required: true
+        default: 'canary'
+        type: choice
+        options:
+          - canary
+          - full
+          - rollback
+      backend_tag:
+        description: 'Backend image tag'
+        required: false
+        default: 'latest'
+      frontend_tag:
+        description: 'Frontend image tag'
+        required: false
+        default: 'latest'
+      canary_weight:
+        description: 'Canary traffic weight (0-100)'
+        required: false
+        default: '20'
+  
+  # auto deploy when build succesfull
+  workflow_run:
+    workflows: ["Build Backend", "Build Frontend"]
+    branches: [main]
+    types:
+      - completed
+
+env:
+  NAMESPACE: smart-alarm
+  DOCKER_REGISTRY: daymonpollet
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tag: ${{ steps.tags.outputs.backend }}
+      frontend_tag: ${{ steps.tags.outputs.frontend }}
+      deployment_type: ${{ steps.type.outputs.type }}
+    
+    steps:
+      - name: Determine image tags
+        id: tags
+        run: |
+          # Use input tags or default to latest
+          BACKEND_TAG="${{ github.event.inputs.backend_tag || 'latest' }}"
+          FRONTEND_TAG="${{ github.event.inputs.frontend_tag || 'latest' }}"
+          
+          # If triggered by workflow_run, use the commit SHA
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            BACKEND_TAG="main-sha-${SHORT_SHA}"
+            FRONTEND_TAG="main-sha-${SHORT_SHA}"
+          fi
+          
+          echo "backend=${BACKEND_TAG}" >> $GITHUB_OUTPUT
+          echo "frontend=${FRONTEND_TAG}" >> $GITHUB_OUTPUT
+          
+      - name: Determine deployment type
+        id: type
+        run: |
+          TYPE="${{ github.event.inputs.deployment_type || 'canary' }}"
+          echo "type=${TYPE}" >> $GITHUB_OUTPUT
+
+  # Initial/Full deployment - deploys everything from scratch
+  deploy-full:
+    needs: prepare
+    if: needs.prepare.outputs.deployment_type == 'full' || github.event_name == 'workflow_run'
+    runs-on: [self-hosted, pi]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create namespace
+        run: |
+          kubectl apply -f k8s/base/namespace.yaml
+          
+      - name: Create secrets
+        run: |
+          # Check if secrets exist, update if they do
+          echo "Creating/updating secrets from environment..."
+          kubectl create secret generic smart-alarm-secrets \
+            --namespace=${{ env.NAMESPACE }} \
+            --from-literal=FITBIT_CLIENT_ID="${{ secrets.FITBIT_CLIENT_ID }}" \
+            --from-literal=FITBIT_CLIENT_SECRET="${{ secrets.FITBIT_CLIENT_SECRET }}" \
+            --from-literal=FITBIT_ACCESS_TOKEN="${{ secrets.FITBIT_ACCESS_TOKEN }}" \
+            --from-literal=FITBIT_REFRESH_TOKEN="${{ secrets.FITBIT_REFRESH_TOKEN }}" \
+            --from-literal=AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
+            --from-literal=IOTHUB_CONNECTION_STRING="${{ secrets.IOTHUB_CONNECTION_STRING }}" \
+            --from-literal=AZURE_ENDPOINT_URL="${{ secrets.AZURE_ENDPOINT_URL }}" \
+            --from-literal=AZURE_ENDPOINT_KEY="${{ secrets.AZURE_ENDPOINT_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create storage directories
+        run: |
+          sudo mkdir -p /data/smart-alarm/data
+          sudo mkdir -p /data/smart-alarm/model
+          sudo chown -R 1000:1000 /data/smart-alarm
+
+      - name: Apply base configuration
+        run: |
+          kubectl apply -f k8s/base/configmap.yaml
+          kubectl apply -f k8s/base/storage.yaml
+
+      - name: Deploy backend
+        run: |
+          # Substitute image tag
+          sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g; s|\${IMAGE_TAG}|${{ needs.prepare.outputs.backend_tag }}|g" \
+            k8s/base/backend-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/base/backend-service.yaml
+
+      - name: Deploy frontend
+        run: |
+          # Substitute image tag
+          sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g; s|\${IMAGE_TAG}|${{ needs.prepare.outputs.frontend_tag }}|g" \
+            k8s/base/frontend-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/base/frontend-service.yaml
+
+      - name: Apply ingress
+        run: |
+          kubectl apply -f k8s/base/ingress.yaml
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/smart-alarm-backend -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/smart-alarm-frontend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n ${{ env.NAMESPACE }}
+          echo ""
+          echo "=== Backend Health Check ==="
+          kubectl exec -n ${{ env.NAMESPACE }} deployment/smart-alarm-backend -- curl -s http://localhost:8080/health || echo "Health check pending..."
+
+  # Canary deployment - deploys new version alongside stable
+  deploy-canary:
+    needs: prepare
+    if: needs.prepare.outputs.deployment_type == 'canary'
+    runs-on: [self-hosted, pi]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify stable deployment exists
+        run: |
+          if ! kubectl get deployment smart-alarm-backend -n ${{ env.NAMESPACE }} > /dev/null 2>&1; then
+            echo "ERROR: Stable deployment not found. Run full deployment first."
+            exit 1
+          fi
+
+      - name: Deploy canary backend
+        run: |
+          # Update canary deployment with new image
+          sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g; s|\${CANARY_TAG}|${{ needs.prepare.outputs.backend_tag }}|g" \
+            k8s/canary/backend-canary.yaml | kubectl apply -f -
+
+      - name: Deploy canary frontend
+        run: |
+          # Update canary deployment with new image
+          sed "s|\${DOCKER_REGISTRY}|${{ env.DOCKER_REGISTRY }}|g; s|\${CANARY_TAG}|${{ needs.prepare.outputs.frontend_tag }}|g" \
+            k8s/canary/frontend-canary.yaml | kubectl apply -f -
+
+      - name: Configure traffic split
+        run: |
+          # Update canary weight in traffic split
+          WEIGHT="${{ github.event.inputs.canary_weight || '20' }}"
+          sed "s|canary-weight: \"20\"|canary-weight: \"${WEIGHT}\"|g" \
+            k8s/canary/traffic-split.yaml | kubectl apply -f -
+
+      - name: Wait for canary rollout
+        run: |
+          kubectl rollout status deployment/smart-alarm-backend-canary -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/smart-alarm-frontend-canary -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Canary health check
+        id: canary_health
+        run: |
+          # Wait for pods to be ready
+          sleep 10
+          
+          # Check canary backend health
+          BACKEND_HEALTH=$(kubectl exec -n ${{ env.NAMESPACE }} deployment/smart-alarm-backend-canary -- curl -s http://localhost:8080/health || echo "failed")
+          
+          if [[ "$BACKEND_HEALTH" == *"healthy"* ]]; then
+            echo "Canary backend is healthy"
+            echo "healthy=true" >> $GITHUB_OUTPUT
+          else
+            echo "WARNING: Canary backend health check failed"
+            echo "healthy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Report canary status
+        run: |
+          echo "=== Canary Deployment Status ==="
+          echo ""
+          echo "Backend Tag: ${{ needs.prepare.outputs.backend_tag }}"
+          echo "Frontend Tag: ${{ needs.prepare.outputs.frontend_tag }}"
+          echo "Traffic Weight: ${{ github.event.inputs.canary_weight || '20' }}%"
+          echo ""
+          echo "=== All Pods ==="
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          echo ""
+          echo "To promote canary to stable:"
+          echo "  1. Increase canary-weight to 100"
+          echo "  2. Run 'Promote Canary' workflow"
+          echo "  3. Or rollback with 'Rollback' deployment type"
+
+  # Rollback - removes canary and reverts to stable
+  rollback:
+    needs: prepare
+    if: needs.prepare.outputs.deployment_type == 'rollback'
+    runs-on: [self-hosted, pi]
+    
+    steps:
+      - name: Remove canary deployments
+        run: |
+          echo "Rolling back canary deployments..."
+          kubectl delete deployment smart-alarm-backend-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete deployment smart-alarm-frontend-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete service smart-alarm-backend-weighted -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete ingress smart-alarm-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+
+      - name: Verify stable deployment
+        run: |
+          echo "=== Stable Deployment Status ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/smart-alarm-backend -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/smart-alarm-frontend -n ${{ env.NAMESPACE }}
+
+  # Promote canary to stable
+  promote:
+    needs: prepare
+    if: needs.prepare.outputs.deployment_type == 'promote'
+    runs-on: [self-hosted, pi]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get canary image tags
+        id: canary_tags
+        run: |
+          BACKEND_IMAGE=$(kubectl get deployment smart-alarm-backend-canary -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.template.spec.containers[0].image}')
+          FRONTEND_IMAGE=$(kubectl get deployment smart-alarm-frontend-canary -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "backend_image=${BACKEND_IMAGE}" >> $GITHUB_OUTPUT
+          echo "frontend_image=${FRONTEND_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Update stable to canary version
+        run: |
+          # Update stable deployments with canary images
+          kubectl set image deployment/smart-alarm-backend \
+            backend=${{ steps.canary_tags.outputs.backend_image }} \
+            -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/smart-alarm-frontend \
+            frontend=${{ steps.canary_tags.outputs.frontend_image }} \
+            -n ${{ env.NAMESPACE }}
+
+      - name: Wait for stable rollout
+        run: |
+          kubectl rollout status deployment/smart-alarm-backend -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/smart-alarm-frontend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Remove canary resources
+        run: |
+          kubectl delete deployment smart-alarm-backend-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete deployment smart-alarm-frontend-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete service smart-alarm-backend-weighted -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl delete ingress smart-alarm-canary -n ${{ env.NAMESPACE }} --ignore-not-found
+
+      - name: Verify promotion
+        run: |
+          echo "=== Promotion Complete ==="
+          echo ""
+          echo "Stable Backend Image: ${{ steps.canary_tags.outputs.backend_image }}"
+          echo "Stable Frontend Image: ${{ steps.canary_tags.outputs.frontend_image }}"
+          echo ""
+          kubectl get pods -n ${{ env.NAMESPACE }}
