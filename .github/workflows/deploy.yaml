@@ -119,6 +119,7 @@ jobs:
             k8s/base/frontend-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/base/frontend-service.yaml
           kubectl apply -f k8s/base/ingress.yaml
+          kubectl rollout restart deployment/smart-alarm-frontend -n ${{ env.NAMESPACE }}
 
       - name: Wait for rollout
         run: |

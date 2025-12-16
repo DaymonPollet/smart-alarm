@@ -122,6 +122,9 @@ def debug_mqtt():
 
 
 if __name__ == '__main__':
+    import os
+    debug_mode = os.getenv('FLASK_ENV', 'production') != 'production'
+    
     print("=" * 60)
     print("Smart Alarm Local API Server")
     print("=" * 60)
@@ -133,4 +136,4 @@ if __name__ == '__main__':
     print(f"Database:        {DB_PATH}")
     print("=" * 60)
     
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=debug_mode)
