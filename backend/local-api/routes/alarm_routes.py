@@ -18,7 +18,6 @@ alarm_bp = Blueprint('alarm', __name__)
 # Background fetch state (shared with main app)
 last_fetch_result = {}
 
-
 def set_last_fetch_result(result):
     global last_fetch_result
     last_fetch_result = result

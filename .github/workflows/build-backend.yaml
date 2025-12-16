@@ -82,13 +82,21 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-  # trigger deployment job on the main branch
-  deploy-trigger:
+  # Show deployment instructions after successful build
+  notify:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger deployment
+      - name: Build complete
         run: |
-          echo "Backend image built: ${{ needs.build.outputs.image_tag }}"
-          echo "Ready for deployment workflow"
+          echo "✅ Backend image built successfully!"
+          echo ""
+          echo "📦 Image: daymonpollet/smart-alarm-backend:latest"
+          echo ""
+          echo "🚀 To deploy to Raspberry Pi:"
+          echo "   1. Go to Actions tab"
+          echo "   2. Select 'Deploy to Pi' workflow"
+          echo "   3. Click 'Run workflow'"
+          echo "   4. Choose deployment_type: full (first time) or canary (updates)"
+          echo "   5. Set image_tag: latest"
