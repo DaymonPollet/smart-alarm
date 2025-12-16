@@ -2,7 +2,7 @@
 Test script for Azure ML Sleep Quality Endpoint
 Use this to verify your deployed endpoint is working correctly.
 """
-
+# AI generated code for debugging, prompt used: Test the azure ml endpoint for sleep quality on different input data, inlcude lots of logging so we can diagnose any issues.
 import requests
 import json
 import os
@@ -12,8 +12,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 endpoint_info_path = os.path.join(SCRIPT_DIR, "endpoint_info.json")
 
 # Default endpoint (update after deployment)
-SCORING_URI = "https://fitbit-sleep-alarm-endpoint.germanywestcentral.inference.ml.azure.com/score"
-API_KEY = "6c2sPyeQIaH3eZkJWK7kcpmLWcVFBWKUjSYNpye7OuTVBfUxmKy8JQQJ99BLAAAAAAAAAAAAINFRAZMLcAvj"
+SCORING_URI = os.getenv("AZURE_ENDPOINT_URL")
+API_KEY = os.getenv("AZURE_ENDPOINT_KEY")
 
 # Try to load from endpoint_info.json
 if os.path.exists(endpoint_info_path):
