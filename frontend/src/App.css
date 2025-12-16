@@ -111,7 +111,18 @@ body {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   padding: var(--spacing-lg) var(--spacing-md);
   color: var(--color-white);
-  text-align: center;
+}
+
+.App-header .header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.App-header .header-content > div {
+  text-align: left;
 }
 
 .App-header h1 {
@@ -125,6 +136,27 @@ body {
   font-size: var(--font-size-base);
 }
 
+.refresh-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+
+.refresh-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.refresh-button:active {
+  transform: scale(0.95);
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -136,8 +168,14 @@ body {
    ============================================ */
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--spacing-md);
+}
+
+@media (max-width: 992px) {
+  .status-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 768px) {

@@ -6,3 +6,4 @@ numpy
 scikit-learn
 joblib
 paho-mqtt
+azure-iot-device

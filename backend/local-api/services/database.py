@@ -146,6 +146,29 @@ def mark_synced(prediction_id):
     conn.commit()
     conn.close()
 
+def update_prediction_cloud_result(prediction_id, cloud_quality, cloud_confidence, cloud_probabilities):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE sleep_predictions 
+        SET cloud_quality = ?, cloud_confidence = ?, cloud_probabilities = ?, synced_to_cloud = 1
+        WHERE id = ?
+    ''', (cloud_quality, cloud_confidence, json.dumps(cloud_probabilities or {}), prediction_id))
+    cursor.execute('DELETE FROM pending_sync WHERE prediction_id = ?', (prediction_id,))
+    conn.commit()
+    conn.close()
+
+def get_prediction_by_id(prediction_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM sleep_predictions WHERE id = ?', (prediction_id,))
+    columns = [desc[0] for desc in cursor.description]
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(zip(columns, row))
+    return None
+
 def get_pending_count():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()

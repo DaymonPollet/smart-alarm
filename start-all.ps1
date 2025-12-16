@@ -7,10 +7,30 @@ Write-Host "  Smart Alarm - Starting Application   " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Ensure Node.js is in PATH (it's installed but sometimes not in terminal PATH)
+$nodePath = "C:\Program Files\nodejs"
+if (Test-Path $nodePath) {
+    $env:PATH = "$nodePath;$env:PATH"
+}
+
 # check env file -> will probably be replaced with githbu secrets soon
 if (-not (Test-Path ".env")) {
     Write-Host "[ERROR] .env file not found. Please create it first." -ForegroundColor Red
     exit 1
+}
+
+# Load .env file into current session
+Write-Host "      Loading environment variables from .env..." -ForegroundColor Cyan
+$envContent = Get-Content ".env" | Where-Object { $_ -match "=" -and $_ -notmatch "^#" }
+$envVars = @{}
+foreach ($line in $envContent) {
+    $parts = $line -split "=", 2
+    if ($parts.Length -eq 2) {
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        $envVars[$key] = $value
+        [Environment]::SetEnvironmentVariable($key, $value, "Process")
+    }
 }
 
 # check python availability
@@ -57,6 +77,10 @@ if (-not (Test-Path "frontend\node_modules")) {
 
 # get python exe from python venv path
 $pythonExe = Join-Path $PWD ".venv\Scripts\python.exe"
+$workingDir = $PWD.Path
+$backendDir = Join-Path $workingDir "backend\local-api"
+$frontendDir = Join-Path $workingDir "frontend"
+$envFilePath = Join-Path $workingDir ".env"
 
 # Start Backend API (with integrated model) in background
 Write-Host ""
@@ -64,11 +88,21 @@ Write-Host "[5/5] Starting services in background..." -ForegroundColor Yellow
 Write-Host "      Starting Backend API (with integrated ML model)..." -ForegroundColor Cyan
 
 $backendJob = Start-Job -ScriptBlock {
-    $python = $using:pythonExe
-    Set-Location $using:PWD
-    Set-Location backend\local-api
-    & $python app.py
-}
+    param($python, $dir, $envFile)
+    Set-Location $dir
+    # Load environment variables from .env file
+    if (Test-Path $envFile) {
+        Get-Content $envFile | Where-Object { $_ -match "=" -and $_ -notmatch "^#" } | ForEach-Object {
+            $parts = $_ -split "=", 2
+            if ($parts.Length -eq 2) {
+                $key = $parts[0].Trim()
+                $value = $parts[1].Trim().Trim('"').Trim("'")
+                [Environment]::SetEnvironmentVariable($key, $value, "Process")
+            }
+        }
+    }
+    & $python app.py 2>&1
+} -ArgumentList $pythonExe, $backendDir, $envFilePath
 
 Start-Sleep -Seconds 3
 
@@ -76,11 +110,12 @@ Start-Sleep -Seconds 3
 Write-Host "      Starting Frontend..." -ForegroundColor Cyan
 
 $frontendJob = Start-Job -ScriptBlock {
-    Set-Location $using:PWD
-    Set-Location frontend
+    param($dir, $nodePath)
+    $env:PATH = "$nodePath;$env:PATH"
+    Set-Location $dir
     $env:BROWSER = "none"
-    npm start
-}
+    npm start 2>&1
+} -ArgumentList $frontendDir, "C:\Program Files\nodejs"
 
 Start-Sleep -Seconds 2
 
@@ -92,12 +127,21 @@ Start-Sleep -Seconds 3
 
 # check on job statusses
 $allRunning = $true
-if ($backendJob.State -ne "Running") {
-    Write-Host "      [WARNING] Backend API may have failed to start" -ForegroundColor Yellow
+$backendState = (Get-Job -Id $backendJob.Id).State
+$frontendState = (Get-Job -Id $frontendJob.Id).State
+
+if ($backendState -ne "Running") {
+    Write-Host "      [WARNING] Backend API may have failed to start (State: $backendState)" -ForegroundColor Yellow
+    if ($backendState -eq "Failed") {
+        Receive-Job -Id $backendJob.Id | ForEach-Object { Write-Host "        $_" -ForegroundColor Red }
+    }
     $allRunning = $false
 }
-if ($frontendJob.State -ne "Running") {
-    Write-Host "      [WARNING] Frontend may have failed to start" -ForegroundColor Yellow
+if ($frontendState -ne "Running") {
+    Write-Host "      [WARNING] Frontend may have failed to start (State: $frontendState)" -ForegroundColor Yellow
+    if ($frontendState -eq "Failed") {
+        Receive-Job -Id $frontendJob.Id | ForEach-Object { Write-Host "        $_" -ForegroundColor Red }
+    }
     $allRunning = $false
 }
 

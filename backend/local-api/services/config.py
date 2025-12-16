@@ -16,10 +16,14 @@ AZURE_ENDPOINT_KEY = os.getenv('AZURE_ENDPOINT_KEY', '')
 
 APPINSIGHTS_CONNECTION_STRING = os.getenv('APPINSIGHTS_CONNECTION_STRING', '')
 
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')
+# Use HiveMQ public broker by default (like lab exercises)
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'broker.hivemq.com')
 MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
-MQTT_TOPIC_PREDICTIONS = os.getenv('MQTT_TOPIC_PREDICTIONS', 'smart-alarm/predictions')
-MQTT_TOPIC_ALERTS = os.getenv('MQTT_TOPIC_ALERTS', 'smart-alarm/alerts')
+MQTT_TOPIC_BASE = os.getenv('MQTT_TOPIC_BASE', 'howest/smartalarm')
+MQTT_TOPIC_PREDICTIONS = f"{MQTT_TOPIC_BASE}/predictions"
+MQTT_TOPIC_ALERTS = f"{MQTT_TOPIC_BASE}/alerts"
+MQTT_TOPIC_TWIN = f"{MQTT_TOPIC_BASE}/twin"
+MQTT_TOPIC_CONFIG = f"{MQTT_TOPIC_BASE}/config"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'sleep_data.db')
 MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'local_model')

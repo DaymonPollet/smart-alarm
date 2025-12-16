@@ -15,7 +15,6 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 
-// Services
 import { 
   sleepService, 
   authService, 
@@ -24,7 +23,6 @@ import {
   cloudService 
 } from './services/api';
 
-// Components
 import {
   StatusBadge,
   AlarmPopup,
@@ -36,19 +34,17 @@ import {
   ArchitectureInfo,
 } from './components';
 
-// Utils
 import { getQualityColor, formatNumber } from './utils/helpers';
 
-// Styles
 import './App.css';
 
-// Initial configuration state
 const INITIAL_CONFIG = {
   fitbit_connected: false,
   monitoring_active: false,
   azure_available: false,
   cloud_enabled: true,
   mqtt_connected: false,
+  iothub_connected: false,
   pending_sync_count: 0,
   alarm: null,
 };
@@ -69,9 +65,7 @@ function App() {
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [alarmTriggerReason, setAlarmTriggerReason] = useState('');
 
-  // ============================================
-  // Data Fetching Functions (using Service Layer)
-  // ============================================
+  // Data Fetching Callbacks
   
   const fetchData = useCallback(async () => {
     try {
@@ -104,20 +98,34 @@ function App() {
   // ============================================
   
   useEffect(() => {
+    // Initial load only - no constant polling to save Azure quota!
     fetchData();
     fetchConfig();
     
-    const interval = setInterval(fetchConfig, 5000);
+    // Only poll when alarm is active (and less frequently - 60s instead of 5s)
+    // This saves ~12x the Azure IoT Hub messages
+    let alarmCheckInterval = null;
+    
+    if (config.alarm?.enabled && !config.alarm?.triggered) {
+      // Only poll when alarm is active and waiting to trigger
+      alarmCheckInterval = setInterval(fetchConfig, 60000); // 60 seconds
+    }
     
     return () => {
-      clearInterval(interval);
+      if (alarmCheckInterval) clearInterval(alarmCheckInterval);
       if (monitoringInterval) clearInterval(monitoringInterval);
     };
-  }, [fetchData, fetchConfig, monitoringInterval]);
+  }, [fetchData, fetchConfig, monitoringInterval, config.alarm?.enabled, config.alarm?.triggered]);
 
-  // ============================================
-  // Event Handlers
-  // ============================================
+
+  // manual refresh handler saves quota
+  const handleManualRefresh = async () => {
+    setMessage('Refreshing...');
+    await Promise.all([fetchData(), fetchConfig()]);
+    setMessage('');
+  };
+
+  // handle event
   
   const showMessage = (msg, duration = 5000) => {
     setMessage(msg);
@@ -129,7 +137,7 @@ function App() {
       const response = await authService.getLoginUrl();
       window.open(response.data.auth_url, '_blank', 'width=600,height=700');
       
-      // Poll for connection status
+      // poll connection status
       const checkInterval = setInterval(fetchConfig, 2000);
       setTimeout(() => clearInterval(checkInterval), 60000);
     } catch (error) {
@@ -148,8 +156,8 @@ function App() {
           ? ' (Cloud model active)' 
           : ' (Local model only)';
         showMessage(response.data.message + cloudStatus);
-        fetchData();
-        fetchConfig();
+        // refresh data after fetch
+        await Promise.all([fetchData(), fetchConfig()]);
       }
     } catch (error) {
       showMessage(`Error: ${error.response?.data?.error || error.message}`);
@@ -199,29 +207,44 @@ function App() {
   };
 
   const handleSetAlarm = async () => {
+    // Optimistic update - show immediately in UI
+    setConfig(prev => ({
+      ...prev,
+      alarm: { ...prev.alarm, enabled: true, wake_time: alarmTime, window_minutes: alarmWindow }
+    }));
+    showMessage(`Alarm set for ${alarmTime} (${alarmWindow}min window)`);
+    
     try {
       await alarmService.setAlarm(alarmTime, alarmWindow);
-      showMessage(`Alarm set for ${alarmTime} (${alarmWindow}min window)`);
-      fetchConfig();
+      fetchConfig(); // Sync with server
     } catch (error) {
       showMessage('Error setting alarm: ' + error.message);
+      fetchConfig(); // Revert on error
     }
   };
 
   const handleDisableAlarm = async () => {
+    // Optimistic update
+    setConfig(prev => ({
+      ...prev,
+      alarm: { ...prev.alarm, enabled: false, triggered: false }
+    }));
+    showMessage('Alarm disabled');
+    
     try {
       await alarmService.deleteAlarm();
-      showMessage('Alarm disabled');
-      fetchConfig();
     } catch (error) {
       showMessage('Error disabling alarm: ' + error.message);
+      fetchConfig();
     }
   };
 
   const handleSnoozeAlarm = async () => {
+    setShowAlarmPopup(false);
+    showMessage('Snoozing...');
+    
     try {
       const response = await alarmService.snoozeAlarm();
-      setShowAlarmPopup(false);
       showMessage(`Snoozed until ${response.data.new_wake_time}`);
       fetchConfig();
     } catch (error) {
@@ -230,23 +253,34 @@ function App() {
   };
 
   const handleDismissAlarm = async () => {
+    setShowAlarmPopup(false);
+    setConfig(prev => ({
+      ...prev,
+      alarm: { ...prev.alarm, triggered: false }
+    }));
+    showMessage('Alarm dismissed');
+    
     try {
       await alarmService.dismissAlarm();
-      setShowAlarmPopup(false);
-      showMessage('Alarm dismissed');
-      fetchConfig();
     } catch (error) {
       console.error('Dismiss error:', error);
     }
   };
 
   const handleToggleCloud = async () => {
+    const newCloudEnabled = !config.cloud_enabled;
+    
+    // Optimistic update - show immediately
+    setConfig(prev => ({ ...prev, cloud_enabled: newCloudEnabled }));
+    showMessage(newCloudEnabled ? 'Enabling cloud...' : 'Cloud disabled');
+    
     try {
-      const response = await cloudService.toggleCloud(!config.cloud_enabled);
+      const response = await cloudService.toggleCloud(newCloudEnabled);
       if (response.data.synced > 0) {
         showMessage(`Cloud enabled - synced ${response.data.synced} pending predictions`);
+        fetchData(); // Refresh data to show synced results
       } else {
-        showMessage(response.data.cloud_enabled 
+        showMessage(newCloudEnabled 
           ? 'Cloud enabled' 
           : 'Cloud disabled - predictions will queue locally'
         );
@@ -254,13 +288,11 @@ function App() {
       fetchConfig();
     } catch (error) {
       showMessage('Error toggling cloud: ' + error.message);
+      fetchConfig(); // Revert on error
     }
   };
 
-  // ============================================
-  // Computed Values
-  // ============================================
-  
+  // compute values for chart
   const chartData = data.slice(0, 20).reverse().map((d, idx) => ({
     index: idx + 1,
     score: d.overall_score || d.local_score || 0,
@@ -271,9 +303,7 @@ function App() {
 
   const latestData = data[0] || {};
 
-  // ============================================
-  // Render
-  // ============================================
+  // rendering logic
   
   return (
     <div className="App">
@@ -288,8 +318,19 @@ function App() {
 
       {/* Header */}
       <header className="App-header">
-        <h1>Smart Sleep Quality Dashboard</h1>
-        <p className="subtitle">AI-Powered Sleep Quality Predictions (Local + Cloud)</p>
+        <div className="header-content">
+          <div>
+            <h1>Smart Sleep Quality Dashboard</h1>
+            <p className="subtitle">AI-Powered Sleep Quality Predictions (Local + Cloud)</p>
+          </div>
+          <button 
+            onClick={handleManualRefresh}
+            className="refresh-button"
+            title="Manually refresh data (saves Azure quota)"
+          >
+             Refresh
+          </button>
+        </div>
       </header>
 
       <div className="container">
@@ -316,6 +357,12 @@ function App() {
             <StatusBadge 
               label="MQTT" 
               isActive={config.mqtt_connected}
+              activeText="Connected"
+              inactiveText="Disconnected"
+            />
+            <StatusBadge 
+              label="IoT Hub" 
+              isActive={config.iothub_connected}
               activeText="Connected"
               inactiveText="Disconnected"
             />
@@ -358,7 +405,7 @@ function App() {
         </Card>
 
         {/* Alarm Configuration Card */}
-        <Card title="⏰ Smart Alarm" variant="alarm">
+        <Card title=" Smart Alarm" variant="alarm">
           {config.alarm?.enabled ? (
             <div className="alarm-active">
               <div className="alarm-status">
@@ -366,7 +413,7 @@ function App() {
                 <p>Wake time: <strong>{config.alarm.wake_time}</strong></p>
                 <p>Smart window: <strong>{config.alarm.window_minutes} minutes</strong></p>
                 {config.alarm.triggered && (
-                  <p className="alarm-triggered-text">⚡ Triggered: {config.alarm.trigger_reason}</p>
+                  <p className="alarm-triggered-text"> Triggered: {config.alarm.trigger_reason}</p>
                 )}
               </div>
               <button onClick={handleDisableAlarm} className="btn btn-danger">
@@ -408,7 +455,7 @@ function App() {
         </Card>
 
         {/* Cloud Configuration Card */}
-        <Card title="☁️ Cloud Configuration" variant="cloud">
+        <Card title=" Cloud Configuration" variant="cloud">
           <div className="cloud-status">
             <div className="cloud-toggle-row">
               <span>Cloud Sync:</span>
@@ -421,7 +468,7 @@ function App() {
             </div>
             {!config.cloud_enabled && config.pending_sync_count > 0 && (
               <p className="pending-sync">
-                📦 {config.pending_sync_count} predictions queued for sync
+                 {config.pending_sync_count} predictions queued for sync
               </p>
             )}
             <p className="note">

@@ -1,7 +1,18 @@
+"""
+MQTT Service - Publishes device state and twin updates to MQTT broker
+Uses HiveMQ public broker (broker.hivemq.com) for easy connectivity
+"""
 import json
 import threading
 import time
-from .config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC_PREDICTIONS, MQTT_TOPIC_ALERTS, config_store
+import random
+from datetime import datetime, timezone
+from .config import (
+    MQTT_BROKER, MQTT_PORT, 
+    MQTT_TOPIC_PREDICTIONS, MQTT_TOPIC_ALERTS, 
+    MQTT_TOPIC_TWIN, MQTT_TOPIC_CONFIG,
+    config_store
+)
 
 try: 
     import paho.mqtt.client as mqtt
@@ -13,15 +24,29 @@ except ImportError:
 mqtt_client = None
 reconnect_thread = None
 stop_reconnect = False
+DEVICE_ID = "RPISmartHome"
 
 def on_mqtt_connect(client, userdata, flags, rc):
+    """Callback when client connects to broker"""
     if rc == 0:
         config_store['mqtt_connected'] = True
-        print("[MQTT] Connected to broker")
+        print(f"[MQTT] Connected to {MQTT_BROKER} successfully!")
+        # Subscribe to config changes (cloud -> device)
+        client.subscribe(MQTT_TOPIC_CONFIG)
         client.subscribe(MQTT_TOPIC_ALERTS)
+        print(f"[MQTT] Subscribed to: {MQTT_TOPIC_CONFIG}, {MQTT_TOPIC_ALERTS}")
+        # Publish initial status
+        publish_device_status()
     else:
         config_store['mqtt_connected'] = False
-        print(f"[MQTT] Connection failed with code {rc}")
+        error_messages = {
+            1: "incorrect protocol version",
+            2: "invalid client identifier", 
+            3: "server unavailable",
+            4: "bad username or password",
+            5: "not authorized"
+        }
+        print(f"[MQTT] Connection failed: {error_messages.get(rc, f'unknown error {rc}')}")
 
 def on_mqtt_disconnect(client, userdata, rc):
     config_store['mqtt_connected'] = False
@@ -47,6 +72,7 @@ def mqtt_reconnect_loop():
         time.sleep(10)
 
 def init_mqtt():
+    """Initialize MQTT client and connect to HiveMQ public broker"""
     global mqtt_client, reconnect_thread, stop_reconnect
     
     if not MQTT_AVAILABLE:
@@ -56,17 +82,19 @@ def init_mqtt():
     stop_reconnect = False
     
     try:
-        mqtt_client = mqtt.Client(client_id="smart-alarm-api", clean_session=True)
+        # Use unique client ID to avoid conflicts on public broker
+        client_id = f"{DEVICE_ID}_{random.randint(1000, 9999)}"
+        mqtt_client = mqtt.Client(client_id=client_id, clean_session=True)
         mqtt_client.on_connect = on_mqtt_connect
         mqtt_client.on_disconnect = on_mqtt_disconnect
         mqtt_client.on_message = on_mqtt_message
         
         mqtt_client.reconnect_delay_set(min_delay=1, max_delay=30)
         
+        print(f"[MQTT] Connecting to {MQTT_BROKER}:{MQTT_PORT}...")
         try:
             mqtt_client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
             mqtt_client.loop_start()
-            print(f"[MQTT] Connecting to {MQTT_BROKER}:{MQTT_PORT}")
         except Exception as e:
             print(f"[MQTT] Initial connection failed: {e}")
             print("[MQTT] Will retry in background...")
@@ -105,5 +133,76 @@ def publish_mqtt(topic, payload):
         print(f"[MQTT] Publish error: {e}")
         return False
 
+def publish_device_status():
+    """Publish current device status to MQTT"""
+    if not mqtt_client or not config_store.get('mqtt_connected'):
+        return False
+    
+    status = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "device_id": DEVICE_ID,
+        "type": "status",
+        "data": {
+            "fitbit_connected": config_store.get('fitbit_connected', False),
+            "cloud_enabled": config_store.get('cloud_enabled', True),
+            "monitoring_active": config_store.get('monitoring_active', False),
+            "iothub_connected": config_store.get('iothub_connected', False),
+            "pending_sync_count": config_store.get('pending_sync_count', 0)
+        }
+    }
+    return publish_mqtt(MQTT_TOPIC_TWIN, status)
+
+def publish_twin_reported(properties):
+    """
+    Publish reported twin properties to MQTT.
+    This mirrors what we report to Azure IoT Hub, making it visible via MQTT too.
+    """
+    if not mqtt_client or not config_store.get('mqtt_connected'):
+        print(f"[MQTT] Cannot publish - connected: {config_store.get('mqtt_connected')}")
+        return False
+    
+    message = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "device_id": DEVICE_ID,
+        "type": "reported_properties",
+        "properties": properties
+    }
+    result = publish_mqtt(MQTT_TOPIC_TWIN, message)
+    print(f"[MQTT] Published reported properties: {properties} -> success={result}", flush=True)
+    return result
+
+def publish_alarm_update(enabled, wake_time=None, window_minutes=None):
+    """Publish alarm configuration update to MQTT"""
+    if not mqtt_client or not config_store.get('mqtt_connected'):
+        return False
+    
+    message = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "device_id": DEVICE_ID,
+        "type": "alarm_update",
+        "data": {
+            "alarm_enabled": enabled,
+            "alarm_wake_time": wake_time,
+            "alarm_window_minutes": window_minutes
+        }
+    }
+    return publish_mqtt(MQTT_TOPIC_TWIN, message)
+
+def publish_prediction(prediction_data):
+    """Publish sleep prediction to MQTT"""
+    if not mqtt_client or not config_store.get('mqtt_connected'):
+        return False
+    
+    message = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "device_id": DEVICE_ID,
+        "type": "prediction",
+        "data": prediction_data
+    }
+    return publish_mqtt(MQTT_TOPIC_PREDICTIONS, message)
+
 def get_mqtt_client():
     return mqtt_client
+
+def is_mqtt_connected():
+    return config_store.get('mqtt_connected', False)

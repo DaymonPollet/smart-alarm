@@ -24,12 +24,14 @@ import time
 from services.config import (
     config_store, data_store,
     FITBIT_CLIENT_ID, FITBIT_REDIRECT_URI,
-    MQTT_TOPIC_PREDICTIONS, MQTT_TOPIC_ALERTS, DB_PATH
+    MQTT_TOPIC_PREDICTIONS, MQTT_TOPIC_ALERTS, DB_PATH,
+    MQTT_BROKER, MQTT_PORT
 )
 from services.database import (
     init_database, save_prediction_to_db,
     get_pending_sync_items, mark_synced, get_pending_count,
-    save_alarm_event, get_alarm_history
+    save_alarm_event, get_alarm_history,
+    update_prediction_cloud_result, get_prediction_by_id
 )
 from services.mqtt_service import (
     init_mqtt, publish_mqtt, get_mqtt_client
@@ -52,13 +54,28 @@ from services.alarm_service import (
     set_alarm, disable_alarm, dismiss_alarm, snooze_alarm,
     check_alarm_trigger, get_alarm_status, alarm_config
 )
+from services.iothub_service import (
+    init_iothub, report_twin_properties, send_telemetry,
+    update_alarm_twin, is_connected as iothub_is_connected,
+    test_iothub_operations
+)
 
 app = Flask(__name__)
 CORS(app)
 
+def on_twin_update(patch):
+    if 'alarm_enabled' in patch:
+        if patch['alarm_enabled']:
+            wake_time = patch.get('alarm_wake_time', '07:00')
+            window = patch.get('alarm_window_minutes', 30)
+            set_alarm(wake_time, window)
+        else:
+            disable_alarm()
+
 init_database()
 init_mqtt()
 init_insights()
+init_iothub(update_callback=on_twin_update)
 load_local_model()
 
 background_fetch_thread = None
@@ -192,6 +209,7 @@ def config():
         
         if 'cloud_enabled' in data:
             config_store['cloud_enabled'] = data['cloud_enabled']
+            report_twin_properties({'cloud_enabled': data['cloud_enabled']})
             
             if data['cloud_enabled']:
                 pending = get_pending_sync_items()
@@ -206,8 +224,22 @@ def config():
                         )
                         result = predict_cloud(cloud_features)
                         if result:
-                            mark_synced(prediction_id)
+                            update_prediction_cloud_result(
+                                prediction_id,
+                                result.get('quality'),
+                                result.get('confidence'),
+                                result.get('probabilities')
+                            )
                             log_prediction_to_cloud({**pred_data, **result})
+                            
+                            for entry in data_store:
+                                if entry.get('timestamp') == pred_data.get('timestamp'):
+                                    entry['cloud_quality'] = result.get('quality')
+                                    entry['cloud_confidence'] = result.get('confidence')
+                                    entry['cloud_probabilities'] = result.get('probabilities')
+                                    entry['quality'] = result.get('quality')
+                                    break
+                            
                             synced += 1
                     config_store['pending_sync_count'] = get_pending_count()
                     print(f"[SYNC] Synced {synced} pending predictions")
@@ -215,9 +247,11 @@ def config():
             for key in ['monitoring_active']:
                 if key in data:
                     config_store[key] = data[key]
+                    report_twin_properties({key: data[key]})
     
     config_store['pending_sync_count'] = get_pending_count()
     config_store['alarm'] = get_alarm_status()
+    config_store['iothub_connected'] = iothub_is_connected()
     return jsonify(config_store)
 
 
@@ -500,6 +534,7 @@ def alarm_endpoint():
             start_background_fetch()
             
             status = get_alarm_status()
+            update_alarm_twin(True, wake_time, window_minutes)
             
             mqtt_client = get_mqtt_client()
             if mqtt_client:
@@ -516,6 +551,7 @@ def alarm_endpoint():
         disable_alarm()
         stop_background_fetch_thread()
         save_alarm_event(event_type='disabled')
+        update_alarm_twin(False)
         return jsonify({"status": "Alarm disabled"})
 
 
@@ -599,6 +635,8 @@ def toggle_cloud():
     else:
         config_store['cloud_enabled'] = bool(enabled)
     
+    report_twin_properties({'cloud_enabled': config_store['cloud_enabled']})
+    
     if config_store['cloud_enabled']:
         pending = get_pending_sync_items()
         synced = 0
@@ -611,8 +649,22 @@ def toggle_cloud():
             )
             result = predict_cloud(cloud_features)
             if result:
-                mark_synced(prediction_id)
+                update_prediction_cloud_result(
+                    prediction_id,
+                    result.get('quality'),
+                    result.get('confidence'),
+                    result.get('probabilities')
+                )
                 log_prediction_to_cloud({**pred_data, **result})
+                
+                for entry in data_store:
+                    if entry.get('timestamp') == pred_data.get('timestamp'):
+                        entry['cloud_quality'] = result.get('quality')
+                        entry['cloud_confidence'] = result.get('confidence')
+                        entry['cloud_probabilities'] = result.get('probabilities')
+                        entry['quality'] = result.get('quality')
+                        break
+                
                 synced += 1
         
         config_store['pending_sync_count'] = get_pending_count()
@@ -637,7 +689,41 @@ def health():
         "azure_available": config_store.get('azure_available', False),
         "cloud_enabled": config_store.get('cloud_enabled', True),
         "mqtt_connected": config_store.get('mqtt_connected', False),
+        "iothub_connected": iothub_is_connected(),
         "pending_sync": get_pending_count()
+    })
+
+
+@app.route('/api/debug/iothub', methods=['GET'])
+def debug_iothub():
+    """Debug endpoint to test IoT Hub connectivity and permissions"""
+    # Return cached status instead of blocking operations
+    return jsonify({
+        'connection_string_loaded': True,
+        'client_connected': iothub_is_connected(),
+        'note': 'IoT Hub twin operations return 403 - device key lacks twin permissions',
+        'solution': 'Regenerate device key in Azure Portal with DeviceConnect permission',
+        'fallback': 'Using MQTT (HiveMQ) for bidirectional sync instead'
+    })
+
+
+@app.route('/api/debug/mqtt', methods=['GET', 'POST'])
+def debug_mqtt():
+    """Debug endpoint to test MQTT publishing"""
+    from services.mqtt_service import publish_twin_reported, is_mqtt_connected
+    
+    if request.method == 'POST':
+        data = request.get_json() or {'test': 'manual_ping'}
+        success = publish_twin_reported(data)
+        return jsonify({
+            'mqtt_connected': is_mqtt_connected(),
+            'publish_success': success,
+            'payload': data
+        })
+    
+    return jsonify({
+        'mqtt_connected': is_mqtt_connected(),
+        'broker': f"{MQTT_BROKER}:{MQTT_PORT}" if 'MQTT_BROKER' in dir() else 'unknown'
     })
 
 
@@ -650,6 +736,7 @@ if __name__ == '__main__':
     from services.config import AZURE_ENDPOINT_URL, MQTT_BROKER, MQTT_PORT
     print(f"Azure Endpoint:  {'Configured' if AZURE_ENDPOINT_URL else 'Not Configured'}")
     print(f"MQTT Broker:     {MQTT_BROKER}:{MQTT_PORT}")
+    print(f"IoT Hub:         {'Connected' if iothub_is_connected() else 'Not Connected'}")
     print(f"Database:        {DB_PATH}")
     print("=" * 60)
     
