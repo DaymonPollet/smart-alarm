@@ -28,11 +28,12 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy application code
 COPY . .
 
-# Create directory for persistent data
-RUN mkdir -p /data
+# Create directory for persistent data and model
+RUN mkdir -p /data /app/local_model
 
-# Copy local model if exists (will be volume mounted in production)
-COPY ../../local_model /app/local_model 2>/dev/null || true
+# Note: local_model will be volume mounted in Kubernetes
+# For local testing, copy model if it exists in the build context
+# COPY local_model/ /app/local_model/ (if present)
 
 # Environment variables
 ENV FLASK_APP=app.py
