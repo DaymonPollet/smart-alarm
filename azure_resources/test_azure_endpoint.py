@@ -12,8 +12,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 endpoint_info_path = os.path.join(SCRIPT_DIR, "endpoint_info.json")
 
 # Default endpoint (update after deployment)
-SCORING_URI = "https://fitbit-sleep-alarm-endpoint.westeurope.inference.ml.azure.com/score"
-API_KEY = "YOUR_API_KEY_HERE"  # Get from Azure ML Studio
+SCORING_URI = "https://fitbit-sleep-alarm-endpoint.germanywestcentral.inference.ml.azure.com/score"
+API_KEY = "6c2sPyeQIaH3eZkJWK7kcpmLWcVFBWKUjSYNpye7OuTVBfUxmKy8JQQJ99BLAAAAAAAAAAAAINFRAZMLcAvj"
 
 # Try to load from endpoint_info.json
 if os.path.exists(endpoint_info_path):
@@ -32,19 +32,24 @@ def get_api_key():
 def test_prediction():
     """Send a test prediction request"""
     
-    # Sample input data (matching the expected features)
+    # Sample input data (matching the 14 cloud model features)
     test_data = {
         "data": [
             {
-                "deep_sleep_in_minutes": 95,
-                "resting_heart_rate": 62,
-                "restlessness": 0.08,
-                "DayOfWeek": 1,  # Tuesday
+                "TotalSteps": 8000,
+                "TotalMinutesAsleep": 420,
+                "TotalTimeInBed": 480,
+                "MinutesAwake_Intraday": 30,
+                "MinutesRestless_Intraday": 15,
+                "Calories": 2200,
+                "VeryActiveMinutes": 45,
+                "SedentaryMinutes": 600,
+                "DayOfWeek": 2,
                 "IsWeekend": 0,
-                "WakeupHour": 7,
-                "Score_Lag1": 78,
-                "DeepSleep_Lag1": 88,
-                "RHR_Lag1": 63
+                "TotalSteps_Lag1": 7500,
+                "TotalMinutesAsleep_Lag1": 400,
+                "Calories_Lag1": 2100,
+                "VeryActiveMinutes_Lag1": 30
             }
         ]
     }

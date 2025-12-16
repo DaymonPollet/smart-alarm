@@ -1,5 +1,6 @@
 .App {
   min-height: 100vh;
+  background: #f5f7fa;
 }
 
 .App-header {
@@ -11,13 +12,13 @@
 
 .App-header h1 {
   margin: 0;
-  font-size: 2.2rem;
+  font-size: 2rem;
 }
 
 .App-header .subtitle {
   margin: 10px 0 0 0;
   opacity: 0.9;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .container {
@@ -39,6 +40,57 @@
   color: #333;
   border-bottom: 2px solid #007bff;
   padding-bottom: 10px;
+  font-size: 1.3rem;
+}
+
+.card h3 {
+  color: #555;
+  font-size: 1rem;
+  margin: 10px 0 5px 0;
+}
+
+/* Status Card */
+.status-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.status-item {
+  text-align: center;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.status-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.status-indicator {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-indicator.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-indicator.inactive {
+  background: #f8d7da;
+  color: #721c24;
 }
 
 .config-item {
@@ -200,7 +252,7 @@
 }
 
 .chart-card {
-  min-height: 400px;
+  min-height: 350px;
 }
 
 .history-table {
@@ -210,11 +262,12 @@
 .history-table table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.9rem;
 }
 
 .history-table th,
 .history-table td {
-  padding: 12px;
+  padding: 10px 8px;
   text-align: left;
   border-bottom: 1px solid #ddd;
 }
@@ -223,10 +276,99 @@
   background-color: #f8f9fa;
   font-weight: 600;
   color: #333;
+  font-size: 0.85rem;
 }
 
 .history-table tr:hover {
   background-color: #f8f9fa;
+}
+
+/* Probability bars */
+.probability-bars {
+  margin-top: 15px;
+}
+
+.prob-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.prob-label {
+  width: 80px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.prob-bar-container {
+  flex: 1;
+  height: 24px;
+  background: #e9ecef;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0 10px;
+}
+
+.prob-bar {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+}
+
+.prob-value {
+  width: 60px;
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Model result display */
+.model-result {
+  background: #f8f9fa;
+  border-left: 3px solid #6c757d;
+}
+
+.data-item.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Architecture info */
+.architecture-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.arch-section {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+
+.arch-section h3 {
+  margin-top: 0;
+  color: #667eea;
+}
+
+.arch-section p {
+  margin: 5px 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+@media (max-width: 768px) {
+  .status-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .architecture-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .history-table {
+    font-size: 0.8rem;
+  }
 }
 
 .btn-success {

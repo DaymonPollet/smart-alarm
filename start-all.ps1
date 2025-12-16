@@ -1,19 +1,19 @@
-# Smart Alarm - Full Application Startup Script
-# This script starts all components: Backend API (with integrated model) and Frontend
-# Note: Model is now integrated directly into local-api, no separate model service needed
+# smart alarm full application startups script
+# start of all components (just frontend and backend)
+# Note: we managed to integrade model into the api for local testing (this worked) -> next up would be making the model a seperate docker image
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Smart Alarm - Starting Application   " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check if .env file exists
+# check env file -> will probably be replaced with githbu secrets soon
 if (-not (Test-Path ".env")) {
     Write-Host "[ERROR] .env file not found. Please create it first." -ForegroundColor Red
     exit 1
 }
 
-# Check if Python is available
+# check python availability
 Write-Host "[1/5] Checking Python installation..." -ForegroundColor Yellow
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "[ERROR] Python is not installed or not in PATH" -ForegroundColor Red
@@ -21,7 +21,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 Write-Host "      Python found" -ForegroundColor Green
 
-# Check if Node.js is available
+# check node.js availability
 Write-Host ""
 Write-Host "[2/5] Checking Node.js installation..." -ForegroundColor Yellow
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -31,7 +31,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 Write-Host "      Node.js found: $(node --version)" -ForegroundColor Green
 
-# Activate virtual environment
+# activate python venv
 Write-Host ""
 Write-Host "[3/5] Activating Python virtual environment..." -ForegroundColor Yellow
 if (Test-Path ".venv\Scripts\Activate.ps1") {
@@ -42,7 +42,7 @@ if (Test-Path ".venv\Scripts\Activate.ps1") {
     exit 1
 }
 
-# Check if node_modules exists
+# check for node module existence
 Write-Host ""
 Write-Host "[4/5] Checking frontend dependencies..." -ForegroundColor Yellow
 if (-not (Test-Path "frontend\node_modules")) {
@@ -55,7 +55,7 @@ if (-not (Test-Path "frontend\node_modules")) {
     Write-Host "      Dependencies already installed" -ForegroundColor Green
 }
 
-# Get Python executable path from venv
+# get python exe from python venv path
 $pythonExe = Join-Path $PWD ".venv\Scripts\python.exe"
 
 # Start Backend API (with integrated model) in background
@@ -72,7 +72,7 @@ $backendJob = Start-Job -ScriptBlock {
 
 Start-Sleep -Seconds 3
 
-# Start Frontend in background (without activating Python venv)
+# start frontend in background (so i am not stuck in the terminal and can close it or execute other comamnds)
 Write-Host "      Starting Frontend..." -ForegroundColor Cyan
 
 $frontendJob = Start-Job -ScriptBlock {
@@ -87,10 +87,10 @@ Start-Sleep -Seconds 2
 Write-Host ""
 Write-Host "Verifying services..." -ForegroundColor Yellow
 
-# Wait a bit for services to start
+# wait for service to start (healthcheck is better practice -> no time now)
 Start-Sleep -Seconds 3
 
-# Check job status
+# check on job statusses
 $allRunning = $true
 if ($backendJob.State -ne "Running") {
     Write-Host "      [WARNING] Backend API may have failed to start" -ForegroundColor Yellow

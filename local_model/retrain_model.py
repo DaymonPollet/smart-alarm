@@ -9,7 +9,8 @@ from sklearn.model_selection import train_test_split
 import joblib
 import os
 
-# Load the preprocessed data
+# this is the proprocessed data from our preprocessed ipynb file
+# even tho we already had a model, this code could later be used in a pipelining feature and makes it easy to retrain again (may our data be adjusted / expended)
 data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'sleep_quality_preprocessed.csv')
 
 print(f"Loading data from: {data_path}")
@@ -24,7 +25,7 @@ df = pd.read_csv(data_path)
 print(f"Data shape: {df.shape}")
 print(f"Columns: {df.columns.tolist()}")
 
-# Features and target (as used in preprocessing.ipynb)
+# features and target (as used in preprocessing.ipynb)
 feature_columns = [
     'revitalization_score',
     'deep_sleep_in_minutes', 
@@ -40,7 +41,7 @@ feature_columns = [
 
 target_column = 'overall_score'
 
-# Check if columns exist
+# check if columns exist
 missing = [c for c in feature_columns if c not in df.columns]
 if missing:
     print(f"Missing columns: {missing}")
@@ -53,12 +54,12 @@ y = df[target_column]
 print(f"\nFeatures shape: {X.shape}")
 print(f"Target shape: {y.shape}")
 
-# Create and fit imputer
+# create and fit imputer
 print("\nCreating imputer...")
 imputer = SimpleImputer(strategy='median')
 X_imputed = imputer.fit_transform(X)
 
-# Train model
+# train model
 print("Training Random Forest Regressor...")
 X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42)
 
@@ -70,16 +71,13 @@ model = RandomForestRegressor(
 )
 model.fit(X_train, y_train)
 
-# Store feature names
+# store feature names -> (this was commented later) -> this come in usefull in debugging
 model.feature_names_in_ = np.array(feature_columns)
 
-# Evaluate
 train_score = model.score(X_train, y_train)
 test_score = model.score(X_test, y_test)
 print(f"\nTraining R²: {train_score:.4f}")
 print(f"Testing R²: {test_score:.4f}")
-
-# Save models
 model_path = os.path.join(os.path.dirname(__file__), 'random_forest_regression_model.pkl')
 imputer_path = os.path.join(os.path.dirname(__file__), 'imputer_reg.pkl')
 

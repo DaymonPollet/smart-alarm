@@ -1,9 +1,9 @@
-# Smart Alarm - Stop All Services
+# smart alarm -> most gracefull way i managed to stop the program
 
 Write-Host "Stopping Smart Alarm services..." -ForegroundColor Yellow
 Write-Host ""
 
-# Stop all background jobs first
+# stop background processes first (otherwise some stuff will respawn)
 $jobs = Get-Job | Where-Object { $_.State -eq "Running" }
 if ($jobs) {
     Write-Host "Stopping background jobs..." -ForegroundColor Yellow
@@ -12,7 +12,7 @@ if ($jobs) {
     Write-Host "Background jobs stopped" -ForegroundColor Green
 }
 
-# Stop Python processes (model service and backend API)
+# stop python backend (this is model service and api)
 $pythonProcesses = Get-Process python -ErrorAction SilentlyContinue
 if ($pythonProcesses) {
     Write-Host "Stopping Python services..." -ForegroundColor Yellow
@@ -20,7 +20,7 @@ if ($pythonProcesses) {
     Write-Host "Python services stopped" -ForegroundColor Green
 }
 
-# Stop Node.js processes (frontend)
+# stop node.js frontend
 $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
 if ($nodeProcesses) {
     Write-Host "Stopping Node.js processes..." -ForegroundColor Yellow

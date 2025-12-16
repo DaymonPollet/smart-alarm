@@ -7,14 +7,18 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 function App() {
   const [data, setData] = useState([]);
-  const [config, setConfig] = useState({ fitbit_connected: false, monitoring_active: false });
+  const [config, setConfig] = useState({ 
+    fitbit_connected: false, 
+    monitoring_active: false,
+    azure_available: false,
+    mqtt_connected: false
+  });
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
   const [monitoringInterval, setMonitoringInterval] = useState(null);
   const [message, setMessage] = useState('');
 
-  // Fetch stored data
   const fetchData = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/api/data?limit=50`);
@@ -26,7 +30,6 @@ function App() {
     }
   }, []);
 
-  // Fetch config
   const fetchConfig = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/api/config`);
@@ -39,7 +42,6 @@ function App() {
   useEffect(() => {
     fetchData();
     fetchConfig();
-    // Only poll config, not data (to avoid confusion with manual fetch)
     const interval = setInterval(() => {
       fetchConfig();
     }, 10000);
@@ -49,7 +51,6 @@ function App() {
     };
   }, [fetchData, fetchConfig, monitoringInterval]);
 
-  // Connect to Fitbit
   const connectFitbit = () => {
     axios.get(`${API_URL}/api/auth/login`)
       .then(response => {
@@ -64,20 +65,16 @@ function App() {
       });
   };
 
-  // Fetch historical sleep data (main fetch button)
   const fetchHistoricalData = async () => {
     setFetching(true);
     setMessage('Fetching sleep history from Fitbit...');
     try {
       const response = await axios.post(`${API_URL}/api/fetch`);
       if (response.data) {
-        setMessage(`✓ ${response.data.message}`);
-        fetchData(); // Refresh display
-        
-        if (response.data.latest) {
-          const latest = response.data.latest;
-          console.log('Latest sleep data:', latest);
-        }
+        const cloudStatus = response.data.cloud_available ? ' (Cloud model active)' : ' (Local model only)';
+        setMessage(response.data.message + cloudStatus);
+        fetchData();
+        fetchConfig();
       }
     } catch (error) {
       setMessage(`Error: ${error.response?.data?.error || error.message}`);
@@ -87,7 +84,6 @@ function App() {
     }
   };
 
-  // Toggle monitoring mode (periodic current-reading fetch)
   const toggleMonitoring = async () => {
     if (monitoring) {
       try {
@@ -107,7 +103,6 @@ function App() {
         setMonitoring(true);
         setMessage('Monitoring started - checking every 60 seconds');
         
-        // Use the current endpoint for monitoring
         const fetchCurrent = async () => {
           try {
             const response = await axios.post(`${API_URL}/api/fetch/current`);
@@ -120,10 +115,7 @@ function App() {
           }
         };
         
-        // Initial fetch
         fetchCurrent();
-        
-        // Set up interval
         const interval = setInterval(fetchCurrent, 60000);
         setMonitoringInterval(interval);
       } catch (error) {
@@ -132,16 +124,14 @@ function App() {
     }
   };
 
-  // Chart data - sleep quality over time
   const chartData = data.slice(0, 20).reverse().map((d, idx) => ({
     index: idx + 1,
-    score: d.overall_score || 0,
+    score: d.overall_score || d.local_score || 0,
     efficiency: d.efficiency || 0,
     deepSleep: d.deep_sleep_minutes || 0,
     date: d.timestamp ? new Date(d.timestamp).toLocaleDateString() : ''
   }));
 
-  // Get quality color based on score
   const getQualityColor = (quality) => {
     switch(quality?.toLowerCase()) {
       case 'excellent': return '#28a745';
@@ -157,20 +147,43 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>🛏️ Smart Sleep Quality Dashboard</h1>
-        <p className="subtitle">AI-Powered Sleep Quality Predictions</p>
+        <h1>Smart Sleep Quality Dashboard</h1>
+        <p className="subtitle">AI-Powered Sleep Quality Predictions (Local + Cloud)</p>
       </header>
 
       <div className="container">
+        {/* System Status Card */}
+        <div className="card status-card">
+          <h2>System Status</h2>
+          <div className="status-grid">
+            <div className="status-item">
+              <span className="status-label">Fitbit</span>
+              <span className={`status-indicator ${config.fitbit_connected ? 'active' : 'inactive'}`}>
+                {config.fitbit_connected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+            <div className="status-item">
+              <span className="status-label">Local Model</span>
+              <span className="status-indicator active">Active</span>
+            </div>
+            <div className="status-item">
+              <span className="status-label">Azure Cloud</span>
+              <span className={`status-indicator ${config.azure_available ? 'active' : 'inactive'}`}>
+                {config.azure_available ? 'Online' : 'Offline'}
+              </span>
+            </div>
+            <div className="status-item">
+              <span className="status-label">MQTT</span>
+              <span className={`status-indicator ${config.mqtt_connected ? 'active' : 'inactive'}`}>
+                {config.mqtt_connected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Connection Card */}
         <div className="card">
           <h2>Fitbit Connection</h2>
-          <div className="config-item">
-            <span>Status:</span>
-            <span className={config.fitbit_connected ? 'status-enabled' : 'status-disabled'}>
-              {config.fitbit_connected ? '✓ CONNECTED' : '✗ NOT CONNECTED'}
-            </span>
-          </div>
           {!config.fitbit_connected ? (
             <>
               <button onClick={connectFitbit} className="btn btn-primary">
@@ -185,20 +198,20 @@ function App() {
                 className="btn btn-primary"
                 disabled={fetching}
               >
-                {fetching ? '⏳ Fetching...' : '📊 Fetch Sleep History'}
+                {fetching ? 'Fetching...' : 'Fetch Sleep History'}
               </button>
               <button 
                 onClick={toggleMonitoring} 
                 className={monitoring ? 'btn btn-danger' : 'btn btn-success'}
                 disabled={fetching}
               >
-                {monitoring ? '⏹️ Stop Monitoring' : '▶️ Start Monitoring'}
+                {monitoring ? 'Stop Monitoring' : 'Start Monitoring'}
               </button>
               {message && <p className="message">{message}</p>}
               <p className="note">
                 {monitoring 
-                  ? '🔄 Monitoring active - Checking every 60 seconds' 
-                  : 'Fetch History: Get all recent sleep sessions | Start Monitoring: Check every 60 seconds'}
+                  ? 'Monitoring active - Checking every 60 seconds' 
+                  : 'Fetch History: Get recent sleep sessions | Start Monitoring: Check every 60 seconds'}
               </p>
             </>
           )}
@@ -211,8 +224,9 @@ function App() {
             <p>Loading...</p>
           ) : latestData.timestamp ? (
             <div className="data-grid">
-              <div className="data-item highlight">
-                <span className="label">Sleep Quality:</span>
+              {/* Primary Quality Display */}
+              <div className="data-item highlight full-width">
+                <span className="label">Final Quality (Best Available):</span>
                 <span 
                   className="value quality-badge" 
                   style={{ backgroundColor: getQualityColor(latestData.quality), color: 'white', padding: '5px 15px', borderRadius: '20px' }}
@@ -220,10 +234,34 @@ function App() {
                   {latestData.quality?.toUpperCase() || 'N/A'}
                 </span>
               </div>
-              <div className="data-item highlight">
-                <span className="label">Overall Score:</span>
-                <span className="value score">{latestData.overall_score?.toFixed(1) || 0}/100</span>
+              
+              {/* Model Comparison */}
+              <div className="data-item model-result">
+                <span className="label">Local Model:</span>
+                <span className="value">
+                  <span style={{ backgroundColor: getQualityColor(latestData.local_quality), color: 'white', padding: '2px 8px', borderRadius: '10px', marginRight: '8px' }}>
+                    {latestData.local_quality?.toUpperCase() || 'N/A'}
+                  </span>
+                  Score: {latestData.local_score?.toFixed(1) || 'N/A'}
+                </span>
               </div>
+              
+              <div className="data-item model-result">
+                <span className="label">Cloud Model:</span>
+                <span className="value">
+                  {latestData.cloud_quality ? (
+                    <>
+                      <span style={{ backgroundColor: getQualityColor(latestData.cloud_quality), color: 'white', padding: '2px 8px', borderRadius: '10px', marginRight: '8px' }}>
+                        {latestData.cloud_quality?.toUpperCase()}
+                      </span>
+                      Confidence: {((latestData.cloud_confidence || 0) * 100).toFixed(1)}%
+                    </>
+                  ) : (
+                    <span style={{ color: '#999' }}>Not available (offline)</span>
+                  )}
+                </span>
+              </div>
+
               <div className="data-item">
                 <span className="label">Sleep Date:</span>
                 <span className="value">{latestData.timestamp ? new Date(latestData.timestamp).toLocaleDateString() : 'N/A'}</span>
@@ -241,10 +279,6 @@ function App() {
                 <span className="value">{latestData.deep_sleep_minutes || 0} min</span>
               </div>
               <div className="data-item">
-                <span className="label">Minutes Asleep:</span>
-                <span className="value">{latestData.minutes_asleep || 'N/A'}</span>
-              </div>
-              <div className="data-item">
                 <span className="label">Restlessness:</span>
                 <span className="value">{((latestData.restlessness || 0) * 100).toFixed(1)}%</span>
               </div>
@@ -260,10 +294,34 @@ function App() {
           )}
         </div>
 
+        {/* Cloud Probabilities Card */}
+        {latestData.cloud_probabilities && Object.keys(latestData.cloud_probabilities).length > 0 && (
+          <div className="card">
+            <h2>Cloud Model Probabilities</h2>
+            <div className="probability-bars">
+              {Object.entries(latestData.cloud_probabilities).map(([label, prob]) => (
+                <div key={label} className="prob-row">
+                  <span className="prob-label">{label}</span>
+                  <div className="prob-bar-container">
+                    <div 
+                      className="prob-bar" 
+                      style={{ 
+                        width: `${(prob * 100)}%`,
+                        backgroundColor: getQualityColor(label)
+                      }}
+                    />
+                  </div>
+                  <span className="prob-value">{(prob * 100).toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Sleep Quality Trend Chart */}
         {chartData.length > 0 && (
           <div className="card chart-card">
-            <h2>📈 Sleep Quality Trend</h2>
+            <h2>Sleep Quality Trend</h2>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -281,7 +339,7 @@ function App() {
         {/* Deep Sleep Chart */}
         {chartData.length > 0 && (
           <div className="card chart-card">
-            <h2>🌙 Deep Sleep Minutes</h2>
+            <h2>Deep Sleep Minutes</h2>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -296,7 +354,7 @@ function App() {
 
         {/* Sleep History Table */}
         <div className="card">
-          <h2>📋 Sleep History</h2>
+          <h2>Sleep History</h2>
           <div className="history-table">
             <table>
               <thead>
@@ -305,8 +363,9 @@ function App() {
                   <th>Duration</th>
                   <th>Efficiency</th>
                   <th>Deep Sleep</th>
-                  <th>Score</th>
-                  <th>Quality</th>
+                  <th>Local</th>
+                  <th>Cloud</th>
+                  <th>Final</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,17 +375,30 @@ function App() {
                     <td>{d.duration_hours?.toFixed(1) || '-'} hrs</td>
                     <td>{d.efficiency || '-'}%</td>
                     <td>{d.deep_sleep_minutes || '-'} min</td>
-                    <td><strong>{d.overall_score?.toFixed(0) || '-'}</strong></td>
                     <td>
                       <span 
                         className="quality-badge-small"
-                        style={{ 
-                          backgroundColor: getQualityColor(d.quality), 
-                          color: 'white', 
-                          padding: '2px 8px', 
-                          borderRadius: '10px',
-                          fontSize: '0.85em'
-                        }}
+                        style={{ backgroundColor: getQualityColor(d.local_quality), color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '0.8em' }}
+                      >
+                        {d.local_quality?.toUpperCase() || '-'}
+                      </span>
+                    </td>
+                    <td>
+                      {d.cloud_quality ? (
+                        <span 
+                          className="quality-badge-small"
+                          style={{ backgroundColor: getQualityColor(d.cloud_quality), color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '0.8em' }}
+                        >
+                          {d.cloud_quality?.toUpperCase()}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.8em' }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      <span 
+                        className="quality-badge-small"
+                        style={{ backgroundColor: getQualityColor(d.quality), color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '0.85em', fontWeight: 'bold' }}
                       >
                         {d.quality?.toUpperCase() || 'N/A'}
                       </span>
@@ -334,7 +406,7 @@ function App() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
                       No sleep data available. Connect Fitbit and fetch your sleep history.
                     </td>
                   </tr>
@@ -344,26 +416,36 @@ function App() {
           </div>
         </div>
 
-        {/* How It Works */}
+        {/* Architecture Info */}
         <div className="card">
-          <h2>ℹ️ How It Works</h2>
-          <ol>
-            <li><strong>Connect Fitbit:</strong> Authorize access to your sleep and heart rate data</li>
-            <li><strong>Fetch Sleep History:</strong> Loads your recent sleep sessions (up to 30 days)</li>
-            <li><strong>AI Prediction:</strong> Our ML model analyzes each session and predicts sleep quality</li>
-            <li><strong>Start Monitoring:</strong> (Optional) Auto-check current data every 60 seconds</li>
-          </ol>
+          <h2>System Architecture</h2>
+          <div className="architecture-info">
+            <div className="arch-section">
+              <h3>Local Model (Edge)</h3>
+              <p>Random Forest Regression predicting sleep quality score (0-100).</p>
+              <p>Features: revitalization, deep sleep, resting HR, restlessness, time features, lagged values.</p>
+              <p>Always available for immediate predictions.</p>
+            </div>
+            <div className="arch-section">
+              <h3>Cloud Model (Azure ML)</h3>
+              <p>Random Forest Classifier predicting quality class (Poor/Fair/Good).</p>
+              <p>Enhanced model with class probabilities.</p>
+              <p>Falls back to local model when offline.</p>
+            </div>
+            <div className="arch-section">
+              <h3>Data Pipeline</h3>
+              <p>MQTT: Publishes predictions for IoT edge devices.</p>
+              <p>SQLite: Stores predictions locally when cloud is unavailable.</p>
+              <p>Auto-sync: Pending predictions sync when cloud reconnects.</p>
+            </div>
+          </div>
           <div className="quality-legend">
-            <p><strong>Quality Scores:</strong></p>
+            <p><strong>Quality Thresholds:</strong></p>
             <span style={{ backgroundColor: '#28a745', color: 'white', padding: '3px 10px', borderRadius: '10px', margin: '0 5px' }}>Excellent (85+)</span>
             <span style={{ backgroundColor: '#5cb85c', color: 'white', padding: '3px 10px', borderRadius: '10px', margin: '0 5px' }}>Good (70-84)</span>
             <span style={{ backgroundColor: '#f0ad4e', color: 'white', padding: '3px 10px', borderRadius: '10px', margin: '0 5px' }}>Fair (55-69)</span>
             <span style={{ backgroundColor: '#d9534f', color: 'white', padding: '3px 10px', borderRadius: '10px', margin: '0 5px' }}>Poor (&lt;55)</span>
           </div>
-          <p className="note" style={{ marginTop: '15px' }}>
-            <strong>Model Features:</strong> Revitalization score, Deep sleep duration, Resting heart rate, 
-            Restlessness, Day of week, Weekend indicator, Wakeup hour, and lagged features.
-          </p>
         </div>
       </div>
     </div>
