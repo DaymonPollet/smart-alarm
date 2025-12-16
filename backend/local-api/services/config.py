@@ -27,8 +27,8 @@ MQTT_TOPIC_ALERTS = f"{MQTT_TOPIC_BASE}/alerts"
 MQTT_TOPIC_TWIN = f"{MQTT_TOPIC_BASE}/twin"
 MQTT_TOPIC_CONFIG = f"{MQTT_TOPIC_BASE}/config"
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'sleep_data.db')
-MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'local_model')
+DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(__file__), '..', 'sleep_data.db'))
+MODEL_DIR = os.getenv('MODEL_PATH', os.path.join(os.path.dirname(__file__), '..', '..', '..', 'local_model'))
 
 data_store = []
 config_store = {
