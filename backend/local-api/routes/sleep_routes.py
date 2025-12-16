@@ -24,6 +24,7 @@ from services.feature_extractor import (
 )
 from services.insights_service import log_prediction_to_cloud
 from services.iothub_service import report_twin_properties
+from services.blob_storage_service import store_prediction, store_sleep_data, get_storage_status
 
 sleep_bp = Blueprint('sleep', __name__)
 
@@ -51,6 +52,7 @@ def config():
     config_store['pending_sync_count'] = get_pending_count()
     config_store['alarm'] = get_alarm_status()
     config_store['iothub_connected'] = iothub_is_connected()
+    config_store['blob_storage'] = get_storage_status()
     return jsonify(config_store)
 
 
@@ -320,6 +322,7 @@ def _process_sleep_session(i, session, sessions_reversed, hr_data, activity_cach
     
     save_prediction_to_db(prediction)
     log_prediction_to_cloud(prediction)
+    store_prediction(prediction)  # Store in Azure Blob Storage
     
     # Publish to MQTT
     mqtt_client = get_mqtt_client()

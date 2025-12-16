@@ -7,3 +7,4 @@ scikit-learn
 joblib
 paho-mqtt
 azure-iot-device
+azure-storage-blob

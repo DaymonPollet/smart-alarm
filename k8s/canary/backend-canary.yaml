@@ -1,5 +1,4 @@
 # Backend Canary Deployment
-# Deploys alongside stable version for testing new releases
 apiVersion: apps/v1
 kind: Deployment
 metadata:

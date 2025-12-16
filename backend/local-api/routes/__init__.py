@@ -12,6 +12,7 @@ from services.feature_extractor import extract_features_for_local_model
 from services.mqtt_service import get_mqtt_client, publish_mqtt
 from services.alarm_service import check_alarm_trigger, get_alarm_status, alarm_config
 from services.database import save_alarm_event
+from services.blob_storage_service import init_blob_storage
 
 from .auth_routes import auth_bp, handle_oauth_callback
 from .alarm_routes import alarm_bp, set_last_fetch_result
@@ -112,3 +113,6 @@ def register_blueprints(app):
     app.register_blueprint(auth_bp)
     app.register_blueprint(alarm_bp)
     app.register_blueprint(sleep_bp)
+    
+    # Initialize Azure Blob Storage
+    init_blob_storage()
