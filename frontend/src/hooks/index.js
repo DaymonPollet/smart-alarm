@@ -5,3 +5,4 @@
 
 export { useSleepData } from './useSleepData';
 export { useConfig } from './useConfig';
+export { useSleepDashboard } from './useSleepDashboard';

@@ -8,16 +8,16 @@ FROM node:18-alpine as builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci
+# Install dependencies (using npm install for better compatibility)
+RUN npm install
 
 # Copy source code
 COPY . .
 
 # Build arguments for API URL configuration
-ARG REACT_APP_API_URL=http://localhost:8080
+ARG REACT_APP_API_URL=/api
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 # Build the application
