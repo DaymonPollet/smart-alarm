@@ -17,7 +17,9 @@ RUN npm install
 COPY . .
 
 # Build arguments for API URL configuration
-ARG REACT_APP_API_URL=/api
+# Empty string = use relative paths (nginx proxies /api to backend)
+# For local dev without nginx: set to http://localhost:8080
+ARG REACT_APP_API_URL=
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 # Build the application

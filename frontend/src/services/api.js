@@ -5,11 +5,15 @@
  */
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+// For Kubernetes: REACT_APP_API_URL should be empty to use relative paths via nginx proxy
+// For local dev: REACT_APP_API_URL defaults to localhost:8080
+const API_URL = process.env.REACT_APP_API_URL !== undefined 
+  ? process.env.REACT_APP_API_URL 
+  : 'http://localhost:8080';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL || '',  // Empty string = relative URLs
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
