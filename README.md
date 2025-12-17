@@ -1,191 +1,190 @@
 # Smart Alarm
 
-A smart alarm system that monitors sleep stages using heart rate data from Fitbit and machine learning predictions.
+A cloud-connected sleep monitoring and smart alarm system built for a Cloud Computing course. The system uses Fitbit data, machine learning predictions, and Azure cloud services to provide sleep quality analysis and intelligent wake-up scheduling.
 
-## Features
+## What This Project Is
 
-- Real-time heart rate monitoring via Fitbit API
-- Machine learning model for sleep stage prediction (Awake, Deep Sleep, Light Sleep)
-- Web dashboard for monitoring and configuration
-- Automated alarm triggering based on optimal wake times
+- A demonstration of edge-to-cloud architecture with bidirectional synchronization
+- A Kubernetes-deployed application running on Raspberry Pi (ARM64)
+- An integration of multiple Azure services (IoT Hub, Blob Storage, ML Endpoints)
+- A practical implementation of CI/CD with GitHub Actions deploying to self-hosted runners
+- A sleep quality prediction system using both local (edge) and cloud ML models
+
+## What This Project Is Not
+
+- A production-ready consumer application
+- A medically validated sleep analysis tool
+- A replacement for professional sleep studies
+- Designed for high availability or scale (single Pi deployment)
 
 ## Architecture
 
-The application consists of three main components:
+```
+                    GitHub Actions (CI/CD)
+                           |
+                           v
++------------------+    Docker Hub    +------------------+
+|   Development    | -------------->  |   Raspberry Pi   |
+|   (Windows PC)   |                  |   (Kubernetes)   |
++------------------+                  +------------------+
+                                             |
+                    +------------------------+------------------------+
+                    |                        |                        |
+                    v                        v                        v
+            +-------------+          +-------------+          +-------------+
+            |   Backend   |          |  Frontend   |          |  Storage    |
+            |   (Flask)   |          |   (React)   |          |   (PVC)     |
+            +-------------+          +-------------+          +-------------+
+                    |
+        +-----------+-----------+-----------+
+        |           |           |           |
+        v           v           v           v
+    Fitbit API  Azure IoT   Azure ML    Azure Blob
+                  Hub       Endpoint     Storage
+```
 
-1. **Model Service** - Python ML service that predicts sleep stages from heart rate data
-2. **Backend API** - Flask API that handles Fitbit integration and data management
-3. **Frontend** - React web dashboard for monitoring and control
+### Components
 
-## Quick Start
+1. **Backend API** (Flask/Python) - Handles Fitbit OAuth, data fetching, predictions, and Azure integrations
+2. **Frontend** (React) - Web dashboard for monitoring, configuration, and alarm management  
+3. **Local ML Model** - Random Forest Regressor running on edge for immediate predictions
+4. **Cloud ML Model** - Azure ML Endpoint for enhanced classification
+5. **Azure IoT Hub** - Device Twin for bidirectional configuration sync
+6. **Azure Blob Storage** - Persistent storage for predictions and sleep data
+7. **MQTT (HiveMQ)** - Real-time messaging between components
+
+## Features
+
+- Fitbit integration for sleep and heart rate data
+- Dual prediction pipeline (local edge model + Azure cloud model)
+- Smart alarm with configurable wake window based on sleep stage
+- Device Twin synchronization with Azure IoT Hub
+- Automatic token refresh for Fitbit OAuth
+- Kubernetes deployment with persistent storage
+- Background data fetching during alarm monitoring
+
+## Quick Start (Local Development)
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Node.js 14 or higher
-- Fitbit Developer account with registered application
+- Python 3.8+
+- Node.js 14+
+- Fitbit Developer account
 
 ### Setup
 
-1. Clone the repository and navigate to the project directory
-
-2. Create a virtual environment:
+1. Clone and create virtual environment:
 ```powershell
+git clone https://github.com/DaymonPollet/smart-alarm.git
+cd smart-alarm
 python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-3. Create a `.env` file in the root directory with your Fitbit credentials:
+2. Create `.env` file with required credentials:
 ```
 FITBIT_CLIENT_ID=your_client_id
 FITBIT_CLIENT_SECRET=your_client_secret
-FITBIT_REDIRECT_URI=http://127.0.0.1:8080/api/oauth/callback
-MODEL_SERVICE_URL=http://localhost:5000
-API_PORT=8080
+FITBIT_REDIRECT_URI=http://127.0.0.1:8080
+AZURE_ENDPOINT_URL=your_azure_ml_endpoint
+AZURE_ENDPOINT_KEY=your_azure_ml_key
+AZURE_STORAGE_CONNECTION_STRING=your_storage_connection_string
+IOTHUB_DEVICE_CONNECTION_STRING=your_device_connection_string
 ```
 
-4. Install Python dependencies:
+3. Install dependencies:
 ```powershell
-.\.venv\Scripts\Activate.ps1
 pip install -r backend/local-api/requirements.txt
-pip install -r backend/python-model-service/requirements.txt
+cd frontend && npm install && cd ..
 ```
 
-5. Install frontend dependencies:
+4. Start services:
 ```powershell
-cd frontend
-npm install
-cd ..
+.\start.ps1
 ```
 
-### Running the Application
+## Deployment (Raspberry Pi)
 
-Start all services with one command:
-```powershell
-.\start-all.ps1
+The application deploys automatically via GitHub Actions when pushing to main.
+
+### Requirements
+
+- Raspberry Pi 4 with K3s installed
+- GitHub Actions self-hosted runner configured
+- GitHub Secrets configured for all credentials
+
+### GitHub Secrets Required
+
+- `DOCKER_USERNAME`, `DOCKER_TOKEN`
+- `FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET`
+- `FITBIT_ACCESS_TOKEN`, `FITBIT_REFRESH_TOKEN`
+- `AZURE_ENDPOINT_URL`, `AZURE_ENDPOINT_KEY`
+- `AZURE_STORAGE_CONNECTION_STRING`
+- `IOTHUB_DEVICE_CONNECTION_STRING`
+
+### Access
+
+After deployment, access the dashboard at:
 ```
-
-This will launch:
-- Model Service on http://localhost:5000
-- Backend API on http://localhost:8080
-- Frontend on http://localhost:3000
-
-The frontend will automatically open in your browser.
-
-### Stopping the Application
-
-```powershell
-.\stop-all.ps1
+http://<raspberry-pi-ip>:30080
 ```
-
-## Usage
-
-1. **Connect Fitbit**: Click "Connect Fitbit" in the dashboard and authorize the application
-2. **Fetch Data**: Use "Fetch Now" to manually retrieve heart rate data and get a prediction
-3. **Enable Monitoring**: Toggle monitoring to continuously track sleep stages
-4. **View Data**: Monitor real-time predictions and heart rate data in the dashboard
-
-## Fitbit OAuth Setup
-
-To connect your Fitbit account:
-
-1. Register an application at https://dev.fitbit.com/apps
-2. Set the OAuth 2.0 Redirect URL to: `http://127.0.0.1:8080/api/oauth/callback`
-3. Request these scopes: activity, heartrate, sleep, profile
-4. Add your Client ID and Secret to the `.env` file
-
-The application will automatically handle token refresh.
 
 ## API Endpoints
 
-### Backend API (http://localhost:8080)
-
-- `GET /api/health` - Health check
-- `GET /api/config` - Get application configuration
-- `GET /api/auth/login` - Start Fitbit OAuth flow
-- `GET /api/oauth/callback` - OAuth callback handler
-- `POST /api/fetch` - Fetch heart rate data and predict sleep stage
-- `GET /api/data` - Get stored predictions
-- `POST /api/predict` - Make prediction from provided data
-
-### Model Service (http://localhost:5000)
-
-- `GET /health` - Health check
-- `POST /predict` - Predict sleep stage from features
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/config` | GET/POST | Get/update configuration |
+| `/api/auth/login` | GET | Start Fitbit OAuth |
+| `/api/auth/code` | GET/POST | Manual OAuth code entry |
+| `/api/fetch` | POST | Fetch sleep data and predict |
+| `/api/alarm` | GET/POST/DELETE | Alarm management |
+| `/api/debug/iothub` | GET/POST | IoT Hub diagnostics |
+| `/api/debug/blob` | GET/POST | Blob storage diagnostics |
 
 ## Project Structure
 
 ```
 smart-alarm/
+├── .github/workflows/     # CI/CD pipeline
 ├── backend/
-│   ├── local-api/          # Flask API server
-│   └── python-model-service/ # ML model service
-├── frontend/               # React web dashboard
-├── data/                   # Training data
-├── .env                    # Environment configuration
-├── start-all.ps1          # Startup script
-└── stop-all.ps1           # Shutdown script
+│   └── local-api/         # Flask API + services
+├── frontend/              # React dashboard
+├── k8s/
+│   └── base/              # Kubernetes manifests
+├── local_model/           # Trained ML models
+├── data/                  # Training datasets
+└── docs/                  # Setup documentation
 ```
 
-## Development
+## Limitations
 
-### Training the Model
-
-```powershell
-cd backend/python-model-service
-python train_model.py
-```
-
-This will create `model.joblib` with the trained classifier.
-
-### Running Individual Services
-
-Model Service:
-```powershell
-cd backend/python-model-service
-python app.py
-```
-
-Backend API:
-```powershell
-cd backend/local-api
-python app.py
-```
-
-Frontend:
-```powershell
-cd frontend
-npm start
-```
+- Fitbit OAuth redirect only works with `http://127.0.0.1:8080` (Fitbit restriction)
+- When accessing from another device, use `/api/auth/code` for manual token entry
+- Azure IoT Hub free tier limited to 8000 messages/day (rate limiting implemented)
+- Single replica deployment (no HA)
+- Requires manual model training before deployment
 
 ## Troubleshooting
 
-### Fitbit Connection Issues
+### Fitbit Shows Disconnected on Pi
 
-If you get "invalid_request - Invalid redirect_uri parameter value":
-- Ensure `FITBIT_REDIRECT_URI` in `.env` matches exactly what is registered in your Fitbit app
-- Check that the backend API is running on port 8080
-- Verify the route is `/api/oauth/callback` not just `/callback`
+1. Tokens must be obtained via OAuth and stored in GitHub Secrets
+2. After updating secrets, redeploy to apply changes
+3. Use `/api/auth/code` page for manual token entry if needed
 
-### Port Already in Use
+### IoT Hub Not Syncing
 
-If services fail to start due to port conflicts:
-- Model Service: Change port in `backend/python-model-service/app.py`
-- Backend API: Change `API_PORT` in `.env`
-- Frontend: Change port in `frontend/package.json` or set `PORT` environment variable
+1. Ensure `IOTHUB_DEVICE_CONNECTION_STRING` (not service connection string) is used
+2. Check that the connection string contains `DeviceId=`
+3. Verify device exists in Azure IoT Hub
 
-### Module Not Found
+### Blob Storage Not Working
 
-Ensure the virtual environment is activated:
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Then reinstall dependencies:
-```powershell
-pip install -r backend/local-api/requirements.txt
-pip install -r backend/python-model-service/requirements.txt
-```
+1. Verify `AZURE_STORAGE_CONNECTION_STRING` is set correctly
+2. Check that `azure-storage-blob` package is installed
+3. Container `smart-alarm-data` is created automatically
 
 ## License
 
-This project is for educational purposes.
+Educational project for Howest Cloud Computing course, everyone is free to contribute to this smoldering mess of a codebase X_X
