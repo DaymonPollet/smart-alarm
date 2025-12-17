@@ -265,14 +265,14 @@ def init_iothub(update_callback=None):
         return False
 
 def report_twin_properties(properties, skip_mqtt=False):
-    \"\"\"
+    """
     Report properties to IoT Hub Device Twin and optionally MQTT.
     Rate limited to prevent exceeding daily quota (8000 messages/day for free tier).
     
     Args:
         properties: Dict of properties to report
         skip_mqtt: If True, skip MQTT publish (use when called from twin callback to avoid spam)
-    \"\"\"
+    """
     global _last_report_time, _pending_report, _last_mqtt_publish_time
     
     iothub_success = False
@@ -287,9 +287,9 @@ def report_twin_properties(properties, skip_mqtt=False):
                 mqtt_success = publish_twin_reported(properties)
                 _last_mqtt_publish_time = current_mqtt_time
             except Exception as e:
-                print(f\"[MQTT] Twin publish failed: {e}\")
+                print(f"[MQTT] Twin publish failed: {e}\n")
         else:
-            print(f\"[MQTT] Rate limited - skipping twin publish\")
+            print(f"[MQTT] Rate limited - skipping twin publish\n")
     
     # Rate limit IoT Hub operations
     current_time = time.time()
@@ -301,7 +301,7 @@ def report_twin_properties(properties, skip_mqtt=False):
             _pending_report.update(properties)  # Merge with existing pending
         else:
             _pending_report = properties.copy()
-        print(f\"[IOTHUB] Rate limited - queued properties (next in {_MIN_REPORT_INTERVAL - time_since_last:.0f}s)\")
+        print(f"[IOTHUB] Rate limited - queued properties (next in {_MIN_REPORT_INTERVAL - time_since_last:.0f}s)\n")
         return mqtt_success  # Return MQTT success status
     
     # Send to IoT Hub
@@ -316,7 +316,7 @@ def report_twin_properties(properties, skip_mqtt=False):
             device_client.patch_twin_reported_properties(to_send)
             _last_report_time = current_time
             iothub_success = True
-            print(f\"[IOTHUB] Reported twin properties: {to_send}\")
+            print(f"[IOTHUB] Reported twin properties: {to_send}\n")
         except Exception as e:
             print(f"[IOTHUB] Twin report failed: {e}")
     
@@ -338,10 +338,10 @@ def send_telemetry(data):
         return False
 
 def update_alarm_twin(enabled, wake_time=None, window_minutes=None):
-    \"\"\"
+    """
     Update alarm settings in IoT Hub reported properties.
     MQTT publishing is handled by report_twin_properties (avoid duplicate publishes).
-    \"\"\"
+    """
     properties = {
         'alarm_enabled': enabled,
         'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())

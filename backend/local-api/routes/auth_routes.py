@@ -100,15 +100,15 @@ def manual_refresh():
 
 @auth_bp.route('/api/auth/callback', methods=['GET'])
 def auth_callback():
-    \"\"\"
+    """
     OAuth callback endpoint - Fitbit redirects here after user authorizes.
     This provides an alternative to the root callback.
-    \"\"\"
+    """
     code = request.args.get('code')
     error = request.args.get('error')
     
     if error:
-        return f\"\"\"
+        return f"""
         <html>
             <body style=\"font-family: Arial; text-align: center; padding: 50px;\">
                 <h2 style=\"color: #dc3545;\">Authorization Failed</h2>
@@ -116,29 +116,29 @@ def auth_callback():
                 <p>{request.args.get('error_description', '')}</p>
             </body>
         </html>
-        \"\"\", 400
+        """, 400
     
     if not code:
-        return \"Missing authorization code\", 400
+        return "Missing authorization code", 400
     
     result = handle_oauth_callback(code, request)
     if result:
         return result
-    return \"Token exchange failed - check server logs\", 400
+    return "Token exchange failed - check server logs", 400
 
 
 def handle_oauth_callback(code, req=None):
-    \"\"\"
+    """
     Handle OAuth callback with authorization code.
     Uses the request to determine the correct redirect_uri.
-    \"\"\"
+    """
     # Determine redirect URI - must match what was used in authorization
     if req:
         redirect_uri = get_redirect_uri(req)
     else:
         redirect_uri = FITBIT_REDIRECT_URI
     
-    print(f\"[OAUTH] Handling callback with redirect_uri: {redirect_uri}\")
+    print(f"[OAUTH] Handling callback with redirect_uri: {redirect_uri}\n")
     
     tokens = exchange_code_for_token(code, redirect_uri)
     if tokens:
@@ -147,9 +147,9 @@ def handle_oauth_callback(code, req=None):
         save_tokens_to_data_dir(tokens['access_token'], tokens['refresh_token'])
         config_store['fitbit_connected'] = True
         
-        print(f\"[OAUTH] Fitbit connected successfully!\")
+        print(f"[OAUTH] Fitbit connected successfully!\n")
         
-        return \"\"\"
+        return """
         <html>
             <body style=\"font-family: Arial; text-align: center; padding: 50px;\">
                 <h2 style=\"color: #28a745;\">✓ Fitbit Connected Successfully!</h2>
@@ -164,7 +164,7 @@ def handle_oauth_callback(code, req=None):
                 </script>
             </body>
         </html>
-        \"\"\"
+        """
     
-    print(f\"[OAUTH] Token exchange failed\")
+    print(f"[OAUTH] Token exchange failed\n")
     return None
