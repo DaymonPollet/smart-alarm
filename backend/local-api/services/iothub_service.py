@@ -302,7 +302,6 @@ def init_iothub(update_callback=None):
         config_store['iothub_connected'] = True
         print(f"[IOTHUB] Connected with Device Twin sync enabled")
         
-        # Start keepalive thread
         twin_listener_thread = threading.Thread(target=_keepalive_loop, daemon=True)
         twin_listener_thread.start()
         
@@ -333,49 +332,29 @@ def _do_report_twin(properties):
 
 
 def _keepalive_loop():
-    """Background thread to keep connection alive and flush pending reports."""
+    """Background thread to flush pending reports only."""
     global _pending_report, _last_report_time, stop_twin_listener
-    
-    print("[IOTHUB] Keepalive thread started")
     
     while not stop_twin_listener:
         try:
-            time.sleep(30)  # Check every 30 seconds
+            time.sleep(60)
             
             if stop_twin_listener:
                 break
-                
-            if device_client:
-                # Check if connection is still alive
-                if not device_client.connected:
-                    print("[IOTHUB] Connection lost - attempting reconnect...")
-                    try:
-                        device_client.connect()
-                        print("[IOTHUB] Reconnected!")
-                        config_store['iothub_connected'] = True
-                    except Exception as e:
-                        print(f"[IOTHUB] Reconnect failed: {e}")
-                        config_store['iothub_connected'] = False
-                        continue
-                
-                # Flush any pending reports if rate limit has passed
+            
+            if device_client and _pending_report:
                 current_time = time.time()
-                if _pending_report and (current_time - _last_report_time >= _MIN_REPORT_INTERVAL):
+                if current_time - _last_report_time >= _MIN_REPORT_INTERVAL:
                     to_send = _pending_report.copy()
                     _pending_report = None
                     try:
                         device_client.patch_twin_reported_properties(to_send)
                         _last_report_time = current_time
-                        print(f"[IOTHUB] Flushed pending report: {to_send}")
-                    except Exception as e:
-                        print(f"[IOTHUB] Flush failed: {e}")
-                        _pending_report = to_send  # Re-queue
+                    except Exception:
+                        _pending_report = to_send
                         
-        except Exception as e:
-            if not stop_twin_listener:
-                print(f"[IOTHUB] Keepalive error: {e}")
-    
-    print("[IOTHUB] Keepalive thread stopped")
+        except Exception:
+            pass
 
 def report_twin_properties(properties, skip_mqtt=False):
     """
