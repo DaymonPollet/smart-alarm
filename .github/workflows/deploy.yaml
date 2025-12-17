@@ -73,7 +73,7 @@ jobs:
 
   deploy:
     needs: [build-backend, build-frontend]
-    runs-on: [self-hosted, linux, arm64]
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
