@@ -8,7 +8,7 @@ from datetime import datetime
 
 AZURE_STORAGE_CONNECTION_STRING = os.getenv(
     'AZURE_STORAGE_CONNECTION_STRING',
-    ''
+    'DefaultEndpointsProtocol=https;AccountName=ccfaimldaymon9170700503;AccountKey=2gO9un4AYyqz2WCUK4Lop2KoxwHvvWNS8ZDBKvye/Z5FdI41Ro1KZpWoSf0hx3zMsbAL+DI+vGpC+AStgeaWuA==;EndpointSuffix=core.windows.net'
 )
 AZURE_STORAGE_CONTAINER = os.getenv('AZURE_STORAGE_CONTAINER', 'smart-alarm-data')
 
