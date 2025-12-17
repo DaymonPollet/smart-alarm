@@ -86,8 +86,10 @@ jobs:
             --from-literal=FITBIT_CLIENT_SECRET="${{ secrets.FITBIT_CLIENT_SECRET }}" \
             --from-literal=FITBIT_ACCESS_TOKEN="${{ secrets.FITBIT_ACCESS_TOKEN }}" \
             --from-literal=FITBIT_REFRESH_TOKEN="${{ secrets.FITBIT_REFRESH_TOKEN }}" \
+            --from-literal=FITBIT_REDIRECT_URI="http://127.0.0.1:8080" \
             --from-literal=AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
             --from-literal=IOTHUB_CONNECTION_STRING="${{ secrets.IOTHUB_CONNECTION_STRING }}" \
+            --from-literal=IOTHUB_DEVICE_CONNECTION_STRING="${{ secrets.IOTHUB_DEVICE_CONNECTION_STRING }}" \
             --from-literal=AZURE_ENDPOINT_URL="${{ secrets.AZURE_ENDPOINT_URL }}" \
             --from-literal=AZURE_ENDPOINT_KEY="${{ secrets.AZURE_ENDPOINT_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -

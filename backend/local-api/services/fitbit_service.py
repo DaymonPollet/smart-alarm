@@ -82,10 +82,18 @@ def load_tokens_from_data_dir():
             if tokens.get('access_token') and tokens.get('refresh_token'):
                 _access_token = tokens['access_token']
                 _refresh_token = tokens['refresh_token']
+                # Update config_store to reflect that we have tokens
+                config_store['fitbit_connected'] = True
                 print(f"[FITBIT] Loaded tokens from {token_file} (updated: {tokens.get('updated_at', 'unknown')})")
                 return True
     except Exception as e:
         print(f"[FITBIT] Could not load from data dir: {e}")
+    
+    # Also check if we have tokens from environment (GitHub secrets)
+    if _access_token and _refresh_token:
+        config_store['fitbit_connected'] = True
+        print(f"[FITBIT] Using tokens from environment")
+        return True
     
     return False
 

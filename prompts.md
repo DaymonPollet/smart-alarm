@@ -138,3 +138,21 @@ sudo nmcli connection modify "Wired connection 1" ipv4.route-metric 2000
 
 # Restart the connection to apply
 sudo nmcli connection up "Wired connection 1"
+
+
+
+
+
+Dubbuging info: On your laptop browser, go to: http://192.168.0.207:30080/api/auth/code (your Pi's address)
+
+This shows a form. First, you need to start the OAuth flow:
+
+Go to http://192.168.0.207:30080/api/auth/login to get the auth URL
+Or manually go to: https://www.fitbit.com/oauth2/authorize?client_id=23TMGB&response_type=code&scope=heartrate+activity+sleep+profile&redirect_uri=http://127.0.0.1:8080
+Authorize on Fitbit - it will redirect to http://127.0.0.1:8080/?code=XXXXX... which fails (connection refused)
+
+Copy the code from that failed URL (everything after code= and before #)
+
+Go back to http://192.168.0.207:30080/api/auth/code and paste the code
+
+Submit - the Pi will exchange the code for tokens and store them
