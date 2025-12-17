@@ -69,6 +69,12 @@ twin_update_callback = None
 stop_twin_listener = False
 twin_listener_thread = None
 
+# Rate limiting for IoT Hub operations (free tier: 8000 messages/day = ~5.5/min)
+_last_report_time = 0
+_MIN_REPORT_INTERVAL = 60  # Minimum 60 seconds between twin reports (max 1440/day)
+_pending_report = None  # Queue up properties if rate limited
+_reporting_from_callback = False  # Prevent callback loops
+
 def get_default_twin_properties():
     return {
         'cloud_enabled': config_store.get('cloud_enabled', True),
@@ -85,6 +91,12 @@ def on_twin_desired_properties_patch(patch):
     Callback when desired properties are updated from Azure portal/cloud.
     Applies changes locally and reports back to confirm.
     """
+    global _reporting_from_callback
+    
+    # Ignore empty patches or patches we just reported (prevent loops)
+    if not patch or _reporting_from_callback:
+        return
+    
     print(f"[IOTHUB] Received twin patch: {patch}")
     
     reported = {}
@@ -132,8 +144,14 @@ def on_twin_desired_properties_patch(patch):
     if twin_update_callback:
         twin_update_callback(patch)
     
-    reported['last_sync'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-    report_twin_properties(reported)
+    # Only report if we have something meaningful to report
+    if reported:
+        reported['last_sync'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        _reporting_from_callback = True
+        try:
+            report_twin_properties(reported)
+        finally:
+            _reporting_from_callback = False
 
 def handle_direct_method(request):
     print(f"[IOTHUB] Direct method: {request.name}")
@@ -223,23 +241,50 @@ def init_iothub(update_callback=None):
         return False
 
 def report_twin_properties(properties):
-    """Report properties to IoT Hub Device Twin and MQTT"""
+    """
+    Report properties to IoT Hub Device Twin and MQTT.
+    Rate limited to prevent exceeding daily quota (8000 messages/day for free tier).
+    """
+    global _last_report_time, _pending_report
+    
     iothub_success = False
     mqtt_success = False
     
-    if device_client:
-        try:
-            device_client.patch_twin_reported_properties(properties)
-            iothub_success = True
-            print(f"[IOTHUB] Reported twin properties: {properties}")
-        except Exception as e:
-            print(f"[IOTHUB] Twin report failed: {e}")
-    
+    # Always publish to MQTT (no rate limit on public broker)
     try:
         from .mqtt_service import publish_twin_reported
         mqtt_success = publish_twin_reported(properties)
     except Exception as e:
         print(f"[MQTT] Twin publish failed: {e}")
+    
+    # Rate limit IoT Hub operations
+    current_time = time.time()
+    time_since_last = current_time - _last_report_time
+    
+    if time_since_last < _MIN_REPORT_INTERVAL:
+        # Queue this report, will be sent when rate limit expires
+        if _pending_report:
+            _pending_report.update(properties)  # Merge with existing pending
+        else:
+            _pending_report = properties.copy()
+        print(f"[IOTHUB] Rate limited - queued properties (next in {_MIN_REPORT_INTERVAL - time_since_last:.0f}s)")
+        return mqtt_success  # Return MQTT success status
+    
+    # Send to IoT Hub
+    if device_client:
+        try:
+            # Merge any pending properties
+            to_send = properties.copy()
+            if _pending_report:
+                to_send.update(_pending_report)
+                _pending_report = None
+            
+            device_client.patch_twin_reported_properties(to_send)
+            _last_report_time = current_time
+            iothub_success = True
+            print(f"[IOTHUB] Reported twin properties: {to_send}")
+        except Exception as e:
+            print(f"[IOTHUB] Twin report failed: {e}")
     
     return iothub_success or mqtt_success
 
@@ -303,45 +348,13 @@ def is_connected():
 def test_iothub_operations():
     """
     Test IoT Hub operations and return diagnostic info.
-    Useful for debugging 403 permission errors.
+    DISABLED to preserve daily message quota (8000/day on free tier).
     """
-    results = {
+    return {
         'connection_string_loaded': bool(IOTHUB_CONNECTION_STRING),
         'has_device_id': 'DeviceId=' in (IOTHUB_CONNECTION_STRING or ''),
         'client_created': device_client is not None,
-        'get_twin': {'success': False, 'error': None},
-        'report_properties': {'success': False, 'error': None},
-        'send_telemetry': {'success': False, 'error': None}
+        'connected': is_connected(),
+        'note': 'Test operations disabled to preserve message quota',
+        'rate_limit': f'{_MIN_REPORT_INTERVAL}s between twin reports'
     }
-    
-    if not device_client:
-        results['error'] = 'No device client - not connected'
-        return results
-    
-    # Test get_twin
-    try:
-        twin = device_client.get_twin()
-        results['get_twin']['success'] = True
-        results['get_twin']['desired_keys'] = list(twin.get('desired', {}).keys())
-    except Exception as e:
-        results['get_twin']['error'] = str(e)
-    
-    # Test report properties
-    try:
-        test_prop = {'test_ping': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
-        device_client.patch_twin_reported_properties(test_prop)
-        results['report_properties']['success'] = True
-    except Exception as e:
-        results['report_properties']['error'] = str(e)
-    
-    # Test telemetry
-    try:
-        from azure.iot.device import Message
-        msg = Message(json.dumps({'test': 'ping'}))
-        msg.content_type = "application/json"
-        device_client.send_message(msg)
-        results['send_telemetry']['success'] = True
-    except Exception as e:
-        results['send_telemetry']['error'] = str(e)
-    
-    return results
