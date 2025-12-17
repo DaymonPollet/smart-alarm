@@ -53,14 +53,15 @@ try:
     import os
     from dotenv import load_dotenv
     load_dotenv()
-    conn_str = os.getenv('IOTHUB_CONNECTION_STRING', '')
+    # Use DEVICE connection string (has DeviceId), not service connection string
+    conn_str = os.getenv('IOTHUB_DEVICE_CONNECTION_STRING', '') or os.getenv('IOTHUB_CONNECTION_STRING', '')
     # Strip any surrounding quotes that might come from .env file
     IOTHUB_CONNECTION_STRING = conn_str.strip().strip('"').strip("'")
-    if IOTHUB_CONNECTION_STRING and 'HostName=' in IOTHUB_CONNECTION_STRING:
+    if IOTHUB_CONNECTION_STRING and 'HostName=' in IOTHUB_CONNECTION_STRING and 'DeviceId=' in IOTHUB_CONNECTION_STRING:
         IOTHUB_AVAILABLE = True
-        print(f"[IOTHUB] Connection string loaded (DeviceId in string: {'DeviceId=' in IOTHUB_CONNECTION_STRING})")
+        print(f"[IOTHUB] Device connection string loaded (DeviceId in string: True)")
     else:
-        print(f"[IOTHUB] Invalid or missing connection string")
+        print(f"[IOTHUB] Invalid connection string - must be a DEVICE connection string with DeviceId")
 except ImportError:
     print("[IOTHUB] azure-iot-device not installed. IoT Hub features disabled.")
 
@@ -251,41 +252,130 @@ def init_iothub(update_callback=None):
     
     try:
         print(f"[IOTHUB] Attempting connection...")
-        device_client = IoTHubDeviceClient.create_from_connection_string(IOTHUB_CONNECTION_STRING)
-        device_client.connect()
-        print(f"[IOTHUB] Connected successfully!")
+        print(f"[IOTHUB] Connection string device: {IOTHUB_CONNECTION_STRING.split('DeviceId=')[1].split(';')[0] if 'DeviceId=' in IOTHUB_CONNECTION_STRING else 'unknown'}")
         
+        device_client = IoTHubDeviceClient.create_from_connection_string(
+            IOTHUB_CONNECTION_STRING,
+            keep_alive=60  # Keep connection alive
+        )
+        
+        # Set up handlers BEFORE connecting
         device_client.on_twin_desired_properties_patch_received = on_twin_desired_properties_patch
         device_client.on_method_request_received = handle_direct_method
         
+        device_client.connect()
+        print(f"[IOTHUB] Connected successfully!")
+        
+        # Get initial twin state
         try:
             twin = device_client.get_twin()
             print(f"[IOTHUB] Got device twin")
             desired = twin.get('desired', {})
+            reported = twin.get('reported', {})
+            
+            print(f"[IOTHUB] Current desired: {dict((k,v) for k,v in desired.items() if not k.startswith('$'))}")
+            print(f"[IOTHUB] Current reported: {dict((k,v) for k,v in reported.items() if not k.startswith('$'))}")
+            
             if desired:
                 filtered = {k: v for k, v in desired.items() if not k.startswith('$')}
                 if filtered:
                     print(f"[IOTHUB] Applying desired properties (initial sync): {filtered}")
                     on_twin_desired_properties_patch(filtered, is_initial_sync=True)
                     
-                    # Do ONE consolidated report after initial sync
+                    # Report initial state to Azure
+                    from .alarm_service import alarm_config
                     initial_reported = {
                         'device_started': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                        'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                        'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                        'alarm_enabled': alarm_config.get('enabled', False),
+                        'alarm_time': alarm_config.get('wake_time', '07:00'),
+                        'smart_wakeup_window': alarm_config.get('window_minutes', 30),
+                        'capture_enabled': alarm_config.get('enabled', False)
                     }
-                    report_twin_properties(initial_reported, skip_mqtt=True)
+                    print(f"[IOTHUB] Reporting initial state: {initial_reported}")
+                    _do_report_twin(initial_reported)
         except Exception as e:
-            print(f"[IOTHUB] Twin read failed: {e} - continuing without initial sync")
+            print(f"[IOTHUB] Twin read failed: {e}")
+            import traceback
+            traceback.print_exc()
         
         config_store['iothub_connected'] = True
         print(f"[IOTHUB] Connected with Device Twin sync enabled")
+        
+        # Start keepalive thread
+        twin_listener_thread = threading.Thread(target=_keepalive_loop, daemon=True)
+        twin_listener_thread.start()
+        
         return True
         
     except Exception as e:
         import traceback
         print(f"[IOTHUB] Connection failed: {e}")
+        traceback.print_exc()
         config_store['iothub_connected'] = False
         return False
+
+
+def _do_report_twin(properties):
+    """Internal function to report twin without rate limiting (for initial sync)."""
+    global _last_report_time
+    if device_client:
+        try:
+            device_client.patch_twin_reported_properties(properties)
+            _last_report_time = time.time()
+            print(f"[IOTHUB] Reported: {properties}")
+            return True
+        except Exception as e:
+            print(f"[IOTHUB] Report failed: {e}")
+            import traceback
+            traceback.print_exc()
+    return False
+
+
+def _keepalive_loop():
+    """Background thread to keep connection alive and flush pending reports."""
+    global _pending_report, _last_report_time, stop_twin_listener
+    
+    print("[IOTHUB] Keepalive thread started")
+    
+    while not stop_twin_listener:
+        try:
+            time.sleep(30)  # Check every 30 seconds
+            
+            if stop_twin_listener:
+                break
+                
+            if device_client:
+                # Check if connection is still alive
+                if not device_client.connected:
+                    print("[IOTHUB] Connection lost - attempting reconnect...")
+                    try:
+                        device_client.connect()
+                        print("[IOTHUB] Reconnected!")
+                        config_store['iothub_connected'] = True
+                    except Exception as e:
+                        print(f"[IOTHUB] Reconnect failed: {e}")
+                        config_store['iothub_connected'] = False
+                        continue
+                
+                # Flush any pending reports if rate limit has passed
+                current_time = time.time()
+                if _pending_report and (current_time - _last_report_time >= _MIN_REPORT_INTERVAL):
+                    to_send = _pending_report.copy()
+                    _pending_report = None
+                    try:
+                        device_client.patch_twin_reported_properties(to_send)
+                        _last_report_time = current_time
+                        print(f"[IOTHUB] Flushed pending report: {to_send}")
+                    except Exception as e:
+                        print(f"[IOTHUB] Flush failed: {e}")
+                        _pending_report = to_send  # Re-queue
+                        
+        except Exception as e:
+            if not stop_twin_listener:
+                print(f"[IOTHUB] Keepalive error: {e}")
+    
+    print("[IOTHUB] Keepalive thread stopped")
 
 def report_twin_properties(properties, skip_mqtt=False):
     """
@@ -409,6 +499,46 @@ def test_iothub_operations():
         'has_device_id': 'DeviceId=' in (IOTHUB_CONNECTION_STRING or ''),
         'client_created': device_client is not None,
         'connected': is_connected(),
+        'client_connected_property': device_client.connected if device_client else False,
         'note': 'Test operations disabled to preserve message quota',
         'rate_limit': f'{_MIN_REPORT_INTERVAL}s between twin reports'
     }
+
+
+def get_twin_state():
+    """Get current device twin state from IoT Hub."""
+    if not device_client:
+        return {'error': 'Client not connected'}
+    
+    try:
+        twin = device_client.get_twin()
+        return {
+            'success': True,
+            'desired': {k: v for k, v in twin.get('desired', {}).items() if not k.startswith('$')},
+            'reported': {k: v for k, v in twin.get('reported', {}).items() if not k.startswith('$')},
+            'desired_version': twin.get('desired', {}).get('$version'),
+            'reported_version': twin.get('reported', {}).get('$version')
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def force_report_state():
+    """Force report current state to twin (bypass rate limit)."""
+    if not device_client:
+        return {'error': 'Client not connected'}
+    
+    try:
+        from .alarm_service import alarm_config
+        state = {
+            'force_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'alarm_enabled': alarm_config.get('enabled', False),
+            'alarm_time': alarm_config.get('wake_time', '07:00'),
+            'smart_wakeup_window': alarm_config.get('window_minutes', 30),
+            'capture_enabled': alarm_config.get('enabled', False)
+        }
+        
+        success = _do_report_twin(state)
+        return {'success': success, 'reported': state}
+    except Exception as e:
+        return {'error': str(e)}

@@ -90,13 +90,26 @@ def health():
     })
 
 
-@app.route('/api/debug/iothub', methods=['GET'])
+@app.route('/api/debug/iothub', methods=['GET', 'POST'])
 def debug_iothub():
-    """Debug endpoint for IoT Hub connectivity."""
+    """Debug endpoint for IoT Hub connectivity and twin sync."""
+    from services.iothub_service import test_iothub_operations, get_twin_state, force_report_state
+    
+    if request.method == 'POST':
+        # Force report current state
+        result = force_report_state()
+        return jsonify({
+            'action': 'force_report',
+            'result': result
+        })
+    
+    # GET: Show status and twin state
+    ops = test_iothub_operations()
+    twin = get_twin_state()
+    
     return jsonify({
-        'connection_string_loaded': True,
-        'client_connected': iothub_is_connected(),
-        'twin_sync_enabled': True
+        'operations': ops,
+        'twin': twin
     })
 
 

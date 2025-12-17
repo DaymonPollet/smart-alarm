@@ -46,6 +46,23 @@ After the refactoring our structure looked like this (we already had a very smal
 └── App.css                       # CSS with variables
 
 
+
+I later did it again and got: backend/local-api/
+├── app.py              # Main entry (120 lines)
+├── app.old.py          # Backup
+└── routes/
+    ├── __init__.py     # Blueprint registration + background fetch
+    ├── auth_routes.py  # OAuth handling
+    ├── alarm_routes.py # Alarm management
+    └── sleep_routes.py # Data fetching & predictions
+
+frontend/src/
+├── App.js                          # UI only (210 lines)
+├── App.old.js                      # Backup
+└── hooks/
+    └── useSleepDashboard.js        # All state & handlers (260 lines)
+
+
 - Fix a commit + stuck in vim:
 
 prompt: "i am stuck here: Improved functionality by:                                                         - Added an alarm service with a default timewindow of 30 (will not yet play alarm sound
@@ -68,3 +85,56 @@ git commit --amend --no-edit
 - Verbose azure output
 
 I tried to connect to the azure oit hub service but they outputs where all massive logs of connectiondropouterrors which was very bizarre. I simply asked ai to 'fix this' and give the file in question 'iothub_service.py' and it provided me with a bunch of bizare expectionhandling but this worked and I can now sync my iot status back and forward.
+
+
+
+- Debugging github runner going offline:
+
+My prompt was: 
+now what: admin@raspberrypi-daymon:~ $ sudo nmcli networking off
+sudo nmcli networking on
+admin@raspberrypi-daymon:~ $ ping -c 3 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 0 received, 100% packet loss, time 2056ms
+admin@raspberrypi-daymon:~ $ ^C
+admin@raspberrypi-daymon:~ $ ip route
+default via 192.168.137.1 dev eth0 proto static metric 100
+default via 192.168.0.1 dev wlan0 proto dhcp src 192.168.0.207 metric 600
+192.168.0.0/24 dev wlan0 proto kernel scope link src 192.168.0.207 metric 600
+192.168.137.0/24 dev eth0 proto kernel scope link src 192.168.137.11 metric 100
+admin@raspberrypi-daymon:~ $
+
+Here was the response:
+
+Here is exactly what's happening: Your Pi has two front doors, and it’s trying to walk through the broken one.
+
+Looking at your ip route, you have two "default" routes. In Linux, the route with the lowest metric wins.
+
+eth0: Metric 100 (via 192.168.137.1). This is usually the default IP when a Windows PC shares its internet via a cable. This path is currently dead/unreachable.
+
+wlan0: Metric 600 (via 192.168.0.1). This is your actual WiFi router. This path works, but the Pi is ignoring it because 600 is "more expensive" than 100.
+
+The Fix: Force the WiFi to be the Priority
+We need to tell the Pi that the WiFi (wlan0) is actually the preferred route to the internet.
+
+1. Delete the "Fake" route temporarily: Run this to immediately kill the broken path and let the WiFi take over:
+
+Bash
+
+sudo ip route del default dev eth0
+Now try ping -c 3 8.8.8.8 again. It should work immediately.
+
+2. Make it permanent (using nmcli): If you don't do this, the broken route will come back next time you reboot or plug in a cable. We will set the Ethernet metric to be much higher (less preferred) than the WiFi.
+
+Bash
+
+# Find the name of your ethernet connection (it's usually "Wired connection 1")
+nmcli connection show
+
+# Set its metric to 2000 (very low priority)
+# Replace "Wired connection 1" with the name from the previous command if it's different
+sudo nmcli connection modify "Wired connection 1" ipv4.route-metric 2000
+
+# Restart the connection to apply
+sudo nmcli connection up "Wired connection 1"
