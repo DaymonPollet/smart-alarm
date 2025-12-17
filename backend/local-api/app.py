@@ -11,6 +11,7 @@ Architecture:
 - SQLite: Stores predictions locally when Azure is unavailable
 """
 
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -95,9 +96,32 @@ def debug_iothub():
     return jsonify({
         'connection_string_loaded': True,
         'client_connected': iothub_is_connected(),
-        'note': 'IoT Hub twin operations return 403 - device key lacks twin permissions',
-        'solution': 'Regenerate device key in Azure Portal with DeviceConnect permission',
-        'fallback': 'Using MQTT (HiveMQ) for bidirectional sync instead'
+        'twin_sync_enabled': True
+    })
+
+
+@app.route('/api/debug/blob', methods=['GET', 'POST'])
+def debug_blob():
+    """Debug endpoint for Azure Blob Storage."""
+    from services.blob_storage_service import store_prediction, get_storage_status, list_predictions
+    
+    if request.method == 'POST':
+        test_data = {
+            'timestamp': datetime.now().isoformat(),
+            'test': True,
+            'quality': 'Good',
+            'score': 85.0
+        }
+        success = store_prediction(test_data)
+        return jsonify({
+            'stored': success,
+            'test_data': test_data,
+            'status': get_storage_status()
+        })
+    
+    return jsonify({
+        'status': get_storage_status(),
+        'recent_predictions': list_predictions()[:10]
     })
 
 

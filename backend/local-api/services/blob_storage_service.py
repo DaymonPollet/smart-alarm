@@ -8,14 +8,22 @@ from .config import AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER
 
 blob_service_client = None
 container_client = None
+_initialized = False
 
 def init_blob_storage():
     """Initialize Azure Blob Storage connection."""
-    global blob_service_client, container_client
+    global blob_service_client, container_client, _initialized
+    
+    if _initialized:
+        return container_client is not None
+    
+    _initialized = True
     
     if not AZURE_STORAGE_CONNECTION_STRING:
         print("[BLOB] Azure Storage connection string not configured")
         return False
+    
+    print(f"[BLOB] Connection string length: {len(AZURE_STORAGE_CONNECTION_STRING)}")
     
     try:
         from azure.storage.blob import BlobServiceClient
@@ -29,45 +37,49 @@ def init_blob_storage():
             if "ContainerAlreadyExists" in str(e):
                 print(f"[BLOB] Using existing container: {AZURE_STORAGE_CONTAINER}")
             else:
+                print(f"[BLOB] Container error: {e}")
                 raise
         
-        print("[BLOB] Azure Blob Storage initialized")
+        print("[BLOB] Azure Blob Storage initialized successfully")
         return True
     except ImportError:
         print("[BLOB] azure-storage-blob not installed")
         return False
     except Exception as e:
         print(f"[BLOB] Failed to initialize: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 def store_prediction(prediction_data: dict) -> bool:
     """
     Store a prediction record in Azure Blob Storage.
-    
-    Args:
-        prediction_data: Dict containing prediction details (timestamp, input, output, etc.)
-    
-    Returns:
-        True if stored successfully, False otherwise
     """
+    global container_client
+    
     if not container_client:
-        return False
+        print("[BLOB] Container client not initialized, attempting init...")
+        init_blob_storage()
+        if not container_client:
+            print("[BLOB] Failed to initialize, cannot store prediction")
+            return False
     
     try:
         timestamp = prediction_data.get('timestamp', datetime.now().isoformat())
         date_prefix = timestamp[:10].replace('-', '/')  
-        blob_name = f"predictions/{date_prefix}/{timestamp.replace(':', '-')}.json"
+        safe_timestamp = timestamp.replace(':', '-').replace('+', '_')
+        blob_name = f"predictions/{date_prefix}/{safe_timestamp}.json"
         
         blob_client = container_client.get_blob_client(blob_name)
-        blob_client.upload_blob(
-            json.dumps(prediction_data, indent=2),
-            overwrite=True
-        )
-        print(f"[BLOB] Stored prediction: {blob_name}")
+        data_to_store = json.dumps(prediction_data, indent=2, default=str)
+        blob_client.upload_blob(data_to_store, overwrite=True)
+        print(f"[BLOB] Stored prediction: {blob_name} ({len(data_to_store)} bytes)")
         return True
     except Exception as e:
         print(f"[BLOB] Failed to store prediction: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

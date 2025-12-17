@@ -83,15 +83,15 @@ def get_default_twin_properties():
 def on_twin_desired_properties_patch(patch):
     """
     Callback when desired properties are updated from Azure portal/cloud.
-    This is the key part: we receive desired state, apply it, then REPORT BACK
-    that we've applied it so the reported properties match the desired.
+    Applies changes locally and reports back to confirm.
     """
     print(f"[IOTHUB] Received twin patch: {patch}")
     
-    # Build reported properties to acknowledge we received and applied the changes
     reported = {}
+    alarm_changed = False
+    alarm_time = None
+    alarm_window = None
     
-    # Handle each property that can be set via desired
     if 'cloud_enabled' in patch:
         config_store['cloud_enabled'] = patch['cloud_enabled']
         reported['cloud_enabled'] = patch['cloud_enabled']
@@ -100,40 +100,40 @@ def on_twin_desired_properties_patch(patch):
         config_store['monitoring_active'] = patch['monitoring_active']
         reported['monitoring_active'] = patch['monitoring_active']
     
-    # Alarm settings from desired properties
     if 'alarm_time' in patch:
-        reported['alarm_wake_time'] = patch['alarm_time']
+        alarm_time = patch['alarm_time']
+        reported['alarm_wake_time'] = alarm_time
         reported['alarm_enabled'] = True
+        alarm_changed = True
         
     if 'smart_wakeup_window' in patch:
-        reported['alarm_window_minutes'] = patch['smart_wakeup_window']
+        alarm_window = patch['smart_wakeup_window']
+        reported['alarm_window_minutes'] = alarm_window
+        alarm_changed = True
     
-    # Capture settings  
-    if 'capture_enabled' in patch:
-        reported['capture_enabled'] = patch['capture_enabled']
-        
-    if 'capture_interval' in patch:
-        reported['capture_interval'] = patch['capture_interval']
-        
-    if 'sensor_interval' in patch:
-        reported['sensor_interval'] = patch['sensor_interval']
-        
-    if 'battery_level' in patch:
-        reported['battery_level'] = patch['battery_level']
+    if 'alarm_enabled' in patch:
+        reported['alarm_enabled'] = patch['alarm_enabled']
+        if not patch['alarm_enabled']:
+            alarm_changed = True
+            alarm_time = None
+    
+    if alarm_changed:
+        try:
+            from .alarm_service import set_alarm, disable_alarm
+            if alarm_time:
+                set_alarm(alarm_time, alarm_window or 30)
+                print(f"[IOTHUB] Alarm set from twin: {alarm_time}, window: {alarm_window or 30}")
+            elif 'alarm_enabled' in patch and not patch['alarm_enabled']:
+                disable_alarm()
+                print(f"[IOTHUB] Alarm disabled from twin")
+        except Exception as e:
+            print(f"[IOTHUB] Failed to apply alarm from twin: {e}")
     
     if twin_update_callback:
         twin_update_callback(patch)
     
-    # Always update last_sync timestamp
     reported['last_sync'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     report_twin_properties(reported)
-    
-    # Also publish to MQTT so subscribers can see the update
-    try:
-        from .mqtt_service import publish_twin_reported
-        publish_twin_reported(reported)
-    except Exception as e:
-        print(f"[IOTHUB] Could not publish to MQTT: {e}")
 
 def handle_direct_method(request):
     print(f"[IOTHUB] Direct method: {request.name}")
@@ -179,14 +179,12 @@ def handle_direct_method(request):
 
 def init_iothub(update_callback=None):
     """
-    Initialize IoT Hub connection.
-    NOTE: Twin operations return 403 - using MQTT for sync instead.
-    IoT Hub connection kept for telemetry/messaging only.
+    Initialize IoT Hub connection with Device Twin bidirectional sync.
     """
     global device_client, twin_update_callback, twin_listener_thread, stop_twin_listener
     
     if not IOTHUB_AVAILABLE or not IOTHUB_CONNECTION_STRING:
-        print("[IOTHUB] Not configured or unavailable - using MQTT for sync")
+        print("[IOTHUB] Not configured or unavailable")
         config_store['iothub_connected'] = False
         return False
     
@@ -199,46 +197,51 @@ def init_iothub(update_callback=None):
         device_client.connect()
         print(f"[IOTHUB] Connected successfully!")
         
-        # Register callbacks for when twin operations work
         device_client.on_twin_desired_properties_patch_received = on_twin_desired_properties_patch
         device_client.on_method_request_received = handle_direct_method
         
-        # Skip twin sync - it returns 403 and blocks
-        # Twin operations disabled until device key is regenerated with proper permissions
-        print(f"[IOTHUB] Skipping twin sync (403 error) - using MQTT for bidirectional sync")
+        try:
+            twin = device_client.get_twin()
+            print(f"[IOTHUB] Got device twin")
+            desired = twin.get('desired', {})
+            if desired:
+                filtered = {k: v for k, v in desired.items() if not k.startswith('$')}
+                if filtered:
+                    print(f"[IOTHUB] Applying desired properties: {filtered}")
+                    on_twin_desired_properties_patch(filtered)
+        except Exception as e:
+            print(f"[IOTHUB] Twin read failed: {e} - continuing without initial sync")
         
         config_store['iothub_connected'] = True
-        print(f"[IOTHUB] Connected (twin sync via MQTT)")
+        print(f"[IOTHUB] Connected with Device Twin sync enabled")
         return True
         
     except Exception as e:
         import traceback
         print(f"[IOTHUB] Connection failed: {e}")
-        print(f"[IOTHUB] Error type: {type(e).__name__}")
-        print(f"[IOTHUB] Traceback: {traceback.format_exc()}")
         config_store['iothub_connected'] = False
         return False
 
 def report_twin_properties(properties):
-    """Report properties to MQTT (primary) - IoT Hub disabled due to 403 errors"""
+    """Report properties to IoT Hub Device Twin and MQTT"""
+    iothub_success = False
     mqtt_success = False
     
-    # MQTT is the primary sync mechanism (works reliably)
+    if device_client:
+        try:
+            device_client.patch_twin_reported_properties(properties)
+            iothub_success = True
+            print(f"[IOTHUB] Reported twin properties: {properties}")
+        except Exception as e:
+            print(f"[IOTHUB] Twin report failed: {e}")
+    
     try:
         from .mqtt_service import publish_twin_reported
         mqtt_success = publish_twin_reported(properties)
     except Exception as e:
-        print(f"[SYNC] MQTT publish failed: {e}")
+        print(f"[MQTT] Twin publish failed: {e}")
     
-    # IoT Hub twin operations disabled - they return 403 and block
-    # To re-enable: regenerate device key in Azure Portal with proper permissions
-    # if device_client:
-    #     try:
-    #         device_client.patch_twin_reported_properties(properties)
-    #     except Exception as e:
-    #         print(f"[IOTHUB] Twin report failed: {e}")
-    
-    return mqtt_success
+    return iothub_success or mqtt_success
 
 def send_telemetry(data):
     if not device_client:
