@@ -95,32 +95,77 @@ def manual_code_entry():
     Manual OAuth code entry - for when redirect to localhost fails.
     
     WORKFLOW (when accessing Pi from laptop):
-    1. Click "Connect Fitbit" - opens Fitbit auth in new tab
+    1. Click "Start Fitbit Authorization" button below
     2. Authorize the app on Fitbit
     3. Fitbit redirects to http://127.0.0.1:8080?code=xxx - THIS FAILS (connection refused)
     4. Copy the 'code' parameter from the failed URL
-    5. POST to /api/auth/code with {"code": "xxx"}
+    5. Paste code in the form and submit
     6. Tokens are exchanged and saved
     """
     if request.method == 'GET':
-        # Show a simple form to enter the code
-        return """
+        # Build the auth URL
+        from urllib.parse import urlencode
+        params = {
+            'client_id': FITBIT_CLIENT_ID,
+            'response_type': 'code',
+            'scope': 'heartrate activity sleep profile',
+            'redirect_uri': FITBIT_REDIRECT_URI
+        }
+        auth_url = f'https://www.fitbit.com/oauth2/authorize?{urlencode(params)}'
+        
+        # Check current status
+        is_connected = config_store.get('fitbit_connected', False)
+        
+        # Show a form with instructions
+        return f"""
         <html>
-            <head><title>Enter Fitbit Code</title></head>
-            <body style="font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px;">
-                <h2>Manual Fitbit Authorization</h2>
-                <p>If the redirect to localhost failed, copy the <code>code</code> parameter from the URL and paste it here.</p>
-                <p style="color: #666; font-size: 14px;">
-                    The URL looks like: <code>http://127.0.0.1:8080/?code=<b>abc123...</b>#_=_</code><br>
-                    Copy everything between <code>code=</code> and <code>#</code> (or end of URL)
-                </p>
-                <form method="POST" style="margin-top: 20px;">
+            <head><title>Fitbit Authorization</title></head>
+            <body style="font-family: Arial; max-width: 700px; margin: 50px auto; padding: 20px;">
+                <h2>🔐 Fitbit Authorization</h2>
+                
+                <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; background: {'#d4edda' if is_connected else '#fff3cd'};">
+                    <strong>Status:</strong> {'✅ Connected' if is_connected else '⚠️ Not Connected'}
+                </div>
+                
+                <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0;">📋 Instructions</h3>
+                    <ol style="margin-bottom: 0;">
+                        <li>Click the <strong>"Start Fitbit Authorization"</strong> button below</li>
+                        <li>Log in to Fitbit and authorize the app</li>
+                        <li>You'll be redirected to a page that <strong>won't load</strong> (connection refused)</li>
+                        <li>Copy the <code>code</code> from the URL: <code>...?code=<strong>COPY_THIS_PART</strong>#_=_</code></li>
+                        <li>Paste it in the form below and click Submit</li>
+                    </ol>
+                </div>
+                
+                <div style="margin-bottom: 30px;">
+                    <a href="{auth_url}" target="_blank" 
+                       style="display: inline-block; padding: 12px 24px; background: #00B0B9; color: white; 
+                              text-decoration: none; border-radius: 6px; font-weight: bold;">
+                        🚀 Start Fitbit Authorization
+                    </a>
+                </div>
+                
+                <hr style="margin: 30px 0;">
+                
+                <h3>Step 2: Paste the code</h3>
+                <form method="POST" style="margin-top: 15px;">
                     <input type="text" name="code" placeholder="Paste authorization code here" 
-                           style="width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px;">
-                    <button type="submit" style="padding: 10px 20px; font-size: 16px; background: #28a745; color: white; border: none; cursor: pointer;">
-                        Submit Code
+                           style="width: 100%; padding: 12px; font-size: 16px; margin-bottom: 10px; 
+                                  border: 2px solid #ddd; border-radius: 6px;">
+                    <button type="submit" 
+                            style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; 
+                                   border: none; cursor: pointer; border-radius: 6px; font-weight: bold;">
+                        ✓ Submit Code
                     </button>
                 </form>
+                
+                <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px;">
+                    <strong>Why is this needed?</strong><br>
+                    Fitbit requires the redirect URL to be pre-registered. The registered URL is 
+                    <code>http://127.0.0.1:8080</code> which only works when running locally. 
+                    When accessing from another device (like this Pi), we need to manually copy the code.
+                </div>
             </body>
         </html>
         """
