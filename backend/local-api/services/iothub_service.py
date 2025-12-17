@@ -71,12 +71,13 @@ twin_listener_thread = None
 
 # Rate limiting for IoT Hub operations (free tier: 8000 messages/day = ~5.5/min)
 _last_report_time = 0
-_MIN_REPORT_INTERVAL = 60  # Minimum 60 seconds between twin reports (max 1440/day)
+_MIN_REPORT_INTERVAL = 20  # 20 seconds = 3 per minute (max 4320/day, under 8000 limit)
 _pending_report = None  # Queue up properties if rate limited
 _reporting_from_callback = False  # Prevent callback loops
 _last_mqtt_publish_time = 0
 _MIN_MQTT_INTERVAL = 5  # Minimum 5 seconds between MQTT twin publishes
 _initial_sync_done = False  # Track if initial sync completed
+_pending_flush_timer = None  # Timer to flush pending reports
 
 def get_default_twin_properties():
     return {
@@ -93,6 +94,11 @@ def on_twin_desired_properties_patch(patch, is_initial_sync=False):
     """
     Callback when desired properties are updated from Azure portal/cloud.
     Applies changes locally and reports back to confirm.
+    
+    Azure Twin property names:
+    - alarm_time: "7:00" format
+    - smart_wakeup_window: minutes (int)
+    - capture_enabled: bool (maps to alarm_enabled)
     """
     global _reporting_from_callback, _initial_sync_done
     
@@ -111,60 +117,77 @@ def on_twin_desired_properties_patch(patch, is_initial_sync=False):
     alarm_changed = False
     alarm_time = None
     alarm_window = None
+    alarm_enabled = None
     
+    # Handle cloud_enabled
     if 'cloud_enabled' in filtered_patch:
         config_store['cloud_enabled'] = filtered_patch['cloud_enabled']
         reported['cloud_enabled'] = filtered_patch['cloud_enabled']
         
+    # Handle monitoring_active  
     if 'monitoring_active' in filtered_patch:
         config_store['monitoring_active'] = filtered_patch['monitoring_active']
         reported['monitoring_active'] = filtered_patch['monitoring_active']
     
+    # Handle alarm_time (from Azure twin)
     if 'alarm_time' in filtered_patch:
         alarm_time = filtered_patch['alarm_time']
-        reported['alarm_wake_time'] = alarm_time
-        reported['alarm_enabled'] = True
         alarm_changed = True
         
+    # Handle smart_wakeup_window (from Azure twin)
     if 'smart_wakeup_window' in filtered_patch:
         alarm_window = filtered_patch['smart_wakeup_window']
-        reported['alarm_window_minutes'] = alarm_window
         alarm_changed = True
     
-    if 'alarm_enabled' in filtered_patch:
-        reported['alarm_enabled'] = filtered_patch['alarm_enabled']
-        if not filtered_patch['alarm_enabled']:
-            alarm_changed = True
-            alarm_time = None
+    # Handle capture_enabled (Azure uses this for alarm on/off)
+    if 'capture_enabled' in filtered_patch:
+        alarm_enabled = filtered_patch['capture_enabled']
+        alarm_changed = True
     
-    # Apply alarm changes locally (but don't trigger twin update from alarm_service)
+    # Also support alarm_enabled directly
+    if 'alarm_enabled' in filtered_patch:
+        alarm_enabled = filtered_patch['alarm_enabled']
+        alarm_changed = True
+    
+    # Apply alarm changes locally
     if alarm_changed:
         try:
-            from .alarm_service import set_alarm, disable_alarm, alarm_config
-            if alarm_time:
-                # Set alarm without triggering twin update (we'll report below)
-                alarm_config['enabled'] = True
-                alarm_config['wake_time'] = alarm_time
-                alarm_config['window_minutes'] = alarm_window or 30
-                alarm_config['triggered'] = False
-                print(f"[IOTHUB] Alarm configured from twin: {alarm_time}, window: {alarm_window or 30}")
-            elif 'alarm_enabled' in filtered_patch and not filtered_patch['alarm_enabled']:
-                alarm_config['enabled'] = False
-                alarm_config['triggered'] = False
-                print(f"[IOTHUB] Alarm disabled from twin")
+            from .alarm_service import alarm_config
+            
+            # Get current values for defaults
+            current_time = alarm_config.get('wake_time', '07:00')
+            current_window = alarm_config.get('window_minutes', 30)
+            current_enabled = alarm_config.get('enabled', False)
+            
+            # Apply updates
+            new_time = alarm_time if alarm_time else current_time
+            new_window = alarm_window if alarm_window else current_window
+            new_enabled = alarm_enabled if alarm_enabled is not None else (True if alarm_time else current_enabled)
+            
+            alarm_config['wake_time'] = new_time
+            alarm_config['window_minutes'] = new_window
+            alarm_config['enabled'] = new_enabled
+            alarm_config['triggered'] = False
+            
+            print(f"[IOTHUB] Alarm updated from twin: enabled={new_enabled}, time={new_time}, window={new_window}")
+            
+            # Report back with our property names
+            reported['alarm_enabled'] = new_enabled
+            reported['alarm_time'] = new_time
+            reported['smart_wakeup_window'] = new_window
+            
         except Exception as e:
             print(f"[IOTHUB] Failed to apply alarm from twin: {e}")
     
     if twin_update_callback:
         twin_update_callback(filtered_patch)
     
-    # Only report if we have something meaningful to report
-    # Skip reporting on initial sync to avoid spam (we'll do one consolidated report)
+    # Report back to confirm sync (unless initial sync)
     if reported and not is_initial_sync:
         reported['last_sync'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         _reporting_from_callback = True
         try:
-            report_twin_properties(reported, skip_mqtt=True)  # Skip MQTT to reduce spam
+            report_twin_properties(reported, skip_mqtt=True)
         finally:
             _reporting_from_callback = False
     
@@ -340,16 +363,19 @@ def send_telemetry(data):
 def update_alarm_twin(enabled, wake_time=None, window_minutes=None):
     """
     Update alarm settings in IoT Hub reported properties.
-    MQTT publishing is handled by report_twin_properties (avoid duplicate publishes).
+    Uses property names that match Azure twin (alarm_time, smart_wakeup_window).
     """
     properties = {
         'alarm_enabled': enabled,
+        'capture_enabled': enabled,  # Azure uses this name
         'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }
     if wake_time:
-        properties['alarm_wake_time'] = wake_time
+        properties['alarm_time'] = wake_time  # Match Azure twin property name
     if window_minutes:
-        properties['alarm_window_minutes'] = window_minutes
+        properties['smart_wakeup_window'] = window_minutes  # Match Azure twin property name
+    
+    print(f"[IOTHUB] Updating alarm twin: enabled={enabled}, time={wake_time}, window={window_minutes}")
     
     # Report to IoT Hub and MQTT (report_twin_properties handles both)
     return report_twin_properties(properties)
