@@ -71,7 +71,7 @@ twin_listener_thread = None
 
 # Rate limiting for IoT Hub operations (free tier: 8000 messages/day = ~5.5/min)
 _last_report_time = 0
-_MIN_REPORT_INTERVAL = 60  # Minimum 60 seconds between twin reports (max 1440/day)
+_MIN_REPORT_INTERVAL = 20  # Minimum 60 seconds between twin reports (max 1440/day)
 _pending_report = None  # Queue up properties if rate limited
 _reporting_from_callback = False  # Prevent callback loops
 
