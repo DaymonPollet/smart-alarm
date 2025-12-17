@@ -10,7 +10,10 @@ from datetime import datetime
 # Format: AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
 _raw_conn_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
 # Strip quotes if present (dotenv may include them)
-AZURE_STORAGE_CONNECTION_STRING = _raw_conn_str.strip().strip('"').strip("'")
+AZURE_STORAGE_CONNECTION_STRING = os.getenv(
+    'AZURE_STORAGE_CONNECTION_STRING',
+    'DefaultEndpointsProtocol=https;AccountName=ccfaimldaymon9170700503;AccountKey=2gO9un4AYyqz2WCUK4Lop2KoxwHvvWNS8ZDBKvye/Z5FdI41Ro1KZpWoSf0hx3zMsbAL+DI+vGpC+AStgeaWuA==;EndpointSuffix=core.windows.net'
+)
 AZURE_STORAGE_CONTAINER = os.getenv('AZURE_STORAGE_CONTAINER', 'smart-alarm-data')
 
 blob_service_client = None
