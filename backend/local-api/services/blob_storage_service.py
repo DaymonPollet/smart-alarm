@@ -5,20 +5,16 @@ Stores sleep predictions and data in Azure Blob Storage for persistence and anal
 import json
 import os
 from datetime import datetime
-from dotenv import load_dotenv
 
-load_dotenv()
-
-def _get_env(key, default=''):
-    val = os.getenv(key, default)
-    if val and val.startswith('"') and val.endswith('"'):
-        val = val[1:-1]
-    if val and val.startswith("'") and val.endswith("'"):
-        val = val[1:-1]
-    return val
-
-AZURE_STORAGE_CONNECTION_STRING = _get_env('AZURE_STORAGE_CONNECTION_STRING', '')
-AZURE_STORAGE_CONTAINER = _get_env('AZURE_STORAGE_CONTAINER', 'smart-alarm-data')
+# Load from environment - connection string should be in .env file
+# Format: AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
+_raw_conn_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
+# Strip quotes if present (dotenv may include them)
+AZURE_STORAGE_CONNECTION_STRING = os.getenv(
+    'AZURE_STORAGE_CONNECTION_STRING',
+    ''
+)
+AZURE_STORAGE_CONTAINER = os.getenv('AZURE_STORAGE_CONTAINER', 'smart-alarm-data')
 
 blob_service_client = None
 container_client = None
