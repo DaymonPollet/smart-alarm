@@ -61,10 +61,10 @@ def root_handler():
     """Root endpoint - handles OAuth callback and status."""
     code = request.args.get('code')
     if code:
-        result = handle_oauth_callback(code)
+        result = handle_oauth_callback(code, request)
         if result:
             return result
-        return "Token exchange failed", 400
+        return "Token exchange failed - check server logs", 400
     
     return jsonify({
         "status": "Smart Alarm API Running",

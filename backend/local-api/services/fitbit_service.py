@@ -246,21 +246,38 @@ def fetch_activity_for_date(date):
     return fitbit_request(f'{FITBIT_API_BASE}/1/user/-/activities/date/{date}.json')
 
 def exchange_code_for_token(code, redirect_uri):
+    \"\"\"
+    Exchange authorization code for access and refresh tokens.
+    The redirect_uri must match exactly what was used in the authorization request.
+    \"\"\"
     try:
+        import base64
+        auth_header = base64.b64encode(f\"{FITBIT_CLIENT_ID}:{FITBIT_CLIENT_SECRET}\".encode()).decode()
+        
+        print(f\"[FITBIT] Exchanging code for token with redirect_uri: {redirect_uri}\")
+        
         response = requests.post(
             'https://api.fitbit.com/oauth2/token',
-            auth=(FITBIT_CLIENT_ID, FITBIT_CLIENT_SECRET),
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            headers={
+                'Authorization': f'Basic {auth_header}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
             data={
                 'client_id': FITBIT_CLIENT_ID,
                 'grant_type': 'authorization_code',
                 'code': code,
                 'redirect_uri': redirect_uri
-            }
+            },
+            timeout=30
         )
+        
         if response.status_code == 200:
-            return response.json()
-        return None
+            tokens = response.json()
+            print(f\"[FITBIT] Token exchange successful!\")
+            return tokens
+        else:
+            print(f\"[FITBIT] Token exchange failed: {response.status_code} - {response.text}\")
+            return None
     except Exception as e:
-        print(f"[FITBIT] Token exchange error: {e}")
+        print(f\"[FITBIT] Token exchange error: {e}\")
         return None

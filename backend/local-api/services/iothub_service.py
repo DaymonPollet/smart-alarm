@@ -71,9 +71,12 @@ twin_listener_thread = None
 
 # Rate limiting for IoT Hub operations (free tier: 8000 messages/day = ~5.5/min)
 _last_report_time = 0
-_MIN_REPORT_INTERVAL = 20  # Minimum 60 seconds between twin reports (max 1440/day)
+_MIN_REPORT_INTERVAL = 60  # Minimum 60 seconds between twin reports (max 1440/day)
 _pending_report = None  # Queue up properties if rate limited
 _reporting_from_callback = False  # Prevent callback loops
+_last_mqtt_publish_time = 0
+_MIN_MQTT_INTERVAL = 5  # Minimum 5 seconds between MQTT twin publishes
+_initial_sync_done = False  # Track if initial sync completed
 
 def get_default_twin_properties():
     return {
@@ -86,72 +89,86 @@ def get_default_twin_properties():
         'last_updated': None
     }
 
-def on_twin_desired_properties_patch(patch):
+def on_twin_desired_properties_patch(patch, is_initial_sync=False):
     """
     Callback when desired properties are updated from Azure portal/cloud.
     Applies changes locally and reports back to confirm.
     """
-    global _reporting_from_callback
+    global _reporting_from_callback, _initial_sync_done
     
     # Ignore empty patches or patches we just reported (prevent loops)
     if not patch or _reporting_from_callback:
         return
     
-    print(f"[IOTHUB] Received twin patch: {patch}")
+    # Filter out metadata keys
+    filtered_patch = {k: v for k, v in patch.items() if not k.startswith('$')}
+    if not filtered_patch:
+        return
+    
+    print(f"[IOTHUB] Received twin patch: {filtered_patch}")
     
     reported = {}
     alarm_changed = False
     alarm_time = None
     alarm_window = None
     
-    if 'cloud_enabled' in patch:
-        config_store['cloud_enabled'] = patch['cloud_enabled']
-        reported['cloud_enabled'] = patch['cloud_enabled']
+    if 'cloud_enabled' in filtered_patch:
+        config_store['cloud_enabled'] = filtered_patch['cloud_enabled']
+        reported['cloud_enabled'] = filtered_patch['cloud_enabled']
         
-    if 'monitoring_active' in patch:
-        config_store['monitoring_active'] = patch['monitoring_active']
-        reported['monitoring_active'] = patch['monitoring_active']
+    if 'monitoring_active' in filtered_patch:
+        config_store['monitoring_active'] = filtered_patch['monitoring_active']
+        reported['monitoring_active'] = filtered_patch['monitoring_active']
     
-    if 'alarm_time' in patch:
-        alarm_time = patch['alarm_time']
+    if 'alarm_time' in filtered_patch:
+        alarm_time = filtered_patch['alarm_time']
         reported['alarm_wake_time'] = alarm_time
         reported['alarm_enabled'] = True
         alarm_changed = True
         
-    if 'smart_wakeup_window' in patch:
-        alarm_window = patch['smart_wakeup_window']
+    if 'smart_wakeup_window' in filtered_patch:
+        alarm_window = filtered_patch['smart_wakeup_window']
         reported['alarm_window_minutes'] = alarm_window
         alarm_changed = True
     
-    if 'alarm_enabled' in patch:
-        reported['alarm_enabled'] = patch['alarm_enabled']
-        if not patch['alarm_enabled']:
+    if 'alarm_enabled' in filtered_patch:
+        reported['alarm_enabled'] = filtered_patch['alarm_enabled']
+        if not filtered_patch['alarm_enabled']:
             alarm_changed = True
             alarm_time = None
     
+    # Apply alarm changes locally (but don't trigger twin update from alarm_service)
     if alarm_changed:
         try:
-            from .alarm_service import set_alarm, disable_alarm
+            from .alarm_service import set_alarm, disable_alarm, alarm_config
             if alarm_time:
-                set_alarm(alarm_time, alarm_window or 30)
-                print(f"[IOTHUB] Alarm set from twin: {alarm_time}, window: {alarm_window or 30}")
-            elif 'alarm_enabled' in patch and not patch['alarm_enabled']:
-                disable_alarm()
+                # Set alarm without triggering twin update (we'll report below)
+                alarm_config['enabled'] = True
+                alarm_config['wake_time'] = alarm_time
+                alarm_config['window_minutes'] = alarm_window or 30
+                alarm_config['triggered'] = False
+                print(f"[IOTHUB] Alarm configured from twin: {alarm_time}, window: {alarm_window or 30}")
+            elif 'alarm_enabled' in filtered_patch and not filtered_patch['alarm_enabled']:
+                alarm_config['enabled'] = False
+                alarm_config['triggered'] = False
                 print(f"[IOTHUB] Alarm disabled from twin")
         except Exception as e:
             print(f"[IOTHUB] Failed to apply alarm from twin: {e}")
     
     if twin_update_callback:
-        twin_update_callback(patch)
+        twin_update_callback(filtered_patch)
     
     # Only report if we have something meaningful to report
-    if reported:
+    # Skip reporting on initial sync to avoid spam (we'll do one consolidated report)
+    if reported and not is_initial_sync:
         reported['last_sync'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         _reporting_from_callback = True
         try:
-            report_twin_properties(reported)
+            report_twin_properties(reported, skip_mqtt=True)  # Skip MQTT to reduce spam
         finally:
             _reporting_from_callback = False
+    
+    _initial_sync_done = True
 
 def handle_direct_method(request):
     print(f"[IOTHUB] Direct method: {request.name}")
@@ -225,8 +242,15 @@ def init_iothub(update_callback=None):
             if desired:
                 filtered = {k: v for k, v in desired.items() if not k.startswith('$')}
                 if filtered:
-                    print(f"[IOTHUB] Applying desired properties: {filtered}")
-                    on_twin_desired_properties_patch(filtered)
+                    print(f"[IOTHUB] Applying desired properties (initial sync): {filtered}")
+                    on_twin_desired_properties_patch(filtered, is_initial_sync=True)
+                    
+                    # Do ONE consolidated report after initial sync
+                    initial_reported = {
+                        'device_started': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                        'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    }
+                    report_twin_properties(initial_reported, skip_mqtt=True)
         except Exception as e:
             print(f"[IOTHUB] Twin read failed: {e} - continuing without initial sync")
         
@@ -240,22 +264,32 @@ def init_iothub(update_callback=None):
         config_store['iothub_connected'] = False
         return False
 
-def report_twin_properties(properties):
-    """
-    Report properties to IoT Hub Device Twin and MQTT.
+def report_twin_properties(properties, skip_mqtt=False):
+    \"\"\"
+    Report properties to IoT Hub Device Twin and optionally MQTT.
     Rate limited to prevent exceeding daily quota (8000 messages/day for free tier).
-    """
-    global _last_report_time, _pending_report
+    
+    Args:
+        properties: Dict of properties to report
+        skip_mqtt: If True, skip MQTT publish (use when called from twin callback to avoid spam)
+    \"\"\"
+    global _last_report_time, _pending_report, _last_mqtt_publish_time
     
     iothub_success = False
     mqtt_success = False
     
-    # Always publish to MQTT (no rate limit on public broker)
-    try:
-        from .mqtt_service import publish_twin_reported
-        mqtt_success = publish_twin_reported(properties)
-    except Exception as e:
-        print(f"[MQTT] Twin publish failed: {e}")
+    # Optionally publish to MQTT with rate limiting
+    if not skip_mqtt:
+        current_mqtt_time = time.time()
+        if current_mqtt_time - _last_mqtt_publish_time >= _MIN_MQTT_INTERVAL:
+            try:
+                from .mqtt_service import publish_twin_reported
+                mqtt_success = publish_twin_reported(properties)
+                _last_mqtt_publish_time = current_mqtt_time
+            except Exception as e:
+                print(f\"[MQTT] Twin publish failed: {e}\")
+        else:
+            print(f\"[MQTT] Rate limited - skipping twin publish\")
     
     # Rate limit IoT Hub operations
     current_time = time.time()
@@ -267,7 +301,7 @@ def report_twin_properties(properties):
             _pending_report.update(properties)  # Merge with existing pending
         else:
             _pending_report = properties.copy()
-        print(f"[IOTHUB] Rate limited - queued properties (next in {_MIN_REPORT_INTERVAL - time_since_last:.0f}s)")
+        print(f\"[IOTHUB] Rate limited - queued properties (next in {_MIN_REPORT_INTERVAL - time_since_last:.0f}s)\")
         return mqtt_success  # Return MQTT success status
     
     # Send to IoT Hub
@@ -282,7 +316,7 @@ def report_twin_properties(properties):
             device_client.patch_twin_reported_properties(to_send)
             _last_report_time = current_time
             iothub_success = True
-            print(f"[IOTHUB] Reported twin properties: {to_send}")
+            print(f\"[IOTHUB] Reported twin properties: {to_send}\")
         except Exception as e:
             print(f"[IOTHUB] Twin report failed: {e}")
     
@@ -304,7 +338,10 @@ def send_telemetry(data):
         return False
 
 def update_alarm_twin(enabled, wake_time=None, window_minutes=None):
-    """Update alarm settings in both IoT Hub reported properties and MQTT"""
+    \"\"\"
+    Update alarm settings in IoT Hub reported properties.
+    MQTT publishing is handled by report_twin_properties (avoid duplicate publishes).
+    \"\"\"
     properties = {
         'alarm_enabled': enabled,
         'last_sync': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -314,17 +351,8 @@ def update_alarm_twin(enabled, wake_time=None, window_minutes=None):
     if window_minutes:
         properties['alarm_window_minutes'] = window_minutes
     
-    # Report to IoT Hub
-    result = report_twin_properties(properties)
-    
-    # Also publish to MQTT
-    try:
-        from .mqtt_service import publish_alarm_update
-        publish_alarm_update(enabled, wake_time, window_minutes)
-    except Exception as e:
-        print(f"[IOTHUB] Could not publish alarm to MQTT: {e}")
-    
-    return result
+    # Report to IoT Hub and MQTT (report_twin_properties handles both)
+    return report_twin_properties(properties)
 
 def stop_iothub():
     global device_client, stop_twin_listener
