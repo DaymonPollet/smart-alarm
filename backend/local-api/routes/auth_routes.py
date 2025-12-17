@@ -1,5 +1,15 @@
 """
 Auth Routes - Fitbit OAuth handling
+
+IMPORTANT: Fitbit OAuth requires redirect_uri to EXACTLY match what's registered
+in the Fitbit Developer Console (dev.fitbit.com).
+
+To use this on Raspberry Pi:
+1. Go to dev.fitbit.com -> Manage My Apps -> Your App
+2. Add your Pi's address to "Redirect URL", e.g.:
+   - http://192.168.0.207:30080  (if using NodePort)
+   - http://192.168.0.207:8080   (if accessing backend directly)
+3. Set FITBIT_REDIRECT_URI in your .env or K8s secrets to match exactly
 """
 from flask import Blueprint, request, jsonify
 from urllib.parse import urlencode
@@ -14,41 +24,22 @@ from services.fitbit_service import (
 auth_bp = Blueprint('auth', __name__)
 
 
-def get_redirect_uri(req):
-    """
-    Get the appropriate redirect URI based on request origin.
-    For Pi deployment: uses the host from the request
-    For local dev: uses configured FITBIT_REDIRECT_URI
-    
-    NOTE: The redirect URI must be registered in Fitbit Developer Console!
-    For Pi: Register http://<pi-ip>:8080 or http://<pi-hostname>:8080
-    """
-    # Use configured redirect URI if set and not localhost
-    if FITBIT_REDIRECT_URI and '127.0.0.1' not in FITBIT_REDIRECT_URI:
-        return FITBIT_REDIRECT_URI
-    
-    # Try to build from request host
-    host = req.headers.get('X-Forwarded-Host') or req.headers.get('Host') or req.host
-    scheme = req.headers.get('X-Forwarded-Proto', 'http')
-    
-    # If accessed via localhost/127.0.0.1, use configured URI
-    if '127.0.0.1' in host or 'localhost' in host:
-        return FITBIT_REDIRECT_URI or f"{scheme}://{host}"
-    
-    # For external access, build URI from host
-    return f"{scheme}://{host}"
-
-
 @auth_bp.route('/api/auth/login', methods=['GET'])
 def fitbit_login():
     """
     Start Fitbit OAuth flow.
     Returns the authorization URL that the user should visit.
     
-    IMPORTANT: The redirect_uri returned must match EXACTLY what's registered
-    in the Fitbit Developer Console (dev.fitbit.com).
+    The redirect_uri MUST be registered in Fitbit Developer Console!
     """
-    redirect_uri = get_redirect_uri(request)
+    # Always use the configured redirect URI - it must match Fitbit's registration
+    redirect_uri = FITBIT_REDIRECT_URI
+    
+    if not redirect_uri:
+        return jsonify({
+            "error": "FITBIT_REDIRECT_URI not configured",
+            "hint": "Set FITBIT_REDIRECT_URI in environment variables"
+        }), 500
     
     params = {
         'client_id': FITBIT_CLIENT_ID,
@@ -60,7 +51,7 @@ def fitbit_login():
     return jsonify({
         "auth_url": f'https://www.fitbit.com/oauth2/authorize?{urlencode(params)}',
         "redirect_uri": redirect_uri,
-        "note": "Ensure this redirect_uri is registered in Fitbit Developer Console"
+        "note": "This redirect_uri must be registered at dev.fitbit.com"
     })
 
 
@@ -110,8 +101,8 @@ def auth_callback():
     if error:
         return f"""
         <html>
-            <body style=\"font-family: Arial; text-align: center; padding: 50px;\">
-                <h2 style=\"color: #dc3545;\">Authorization Failed</h2>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h2 style="color: #dc3545;">Authorization Failed</h2>
                 <p>Error: {error}</p>
                 <p>{request.args.get('error_description', '')}</p>
             </body>
@@ -121,24 +112,20 @@ def auth_callback():
     if not code:
         return "Missing authorization code", 400
     
-    result = handle_oauth_callback(code, request)
+    result = handle_oauth_callback(code)
     if result:
         return result
     return "Token exchange failed - check server logs", 400
 
 
-def handle_oauth_callback(code, req=None):
+def handle_oauth_callback(code):
     """
     Handle OAuth callback with authorization code.
-    Uses the request to determine the correct redirect_uri.
+    Always uses the configured FITBIT_REDIRECT_URI (must match Fitbit registration).
     """
-    # Determine redirect URI - must match what was used in authorization
-    if req:
-        redirect_uri = get_redirect_uri(req)
-    else:
-        redirect_uri = FITBIT_REDIRECT_URI
+    redirect_uri = FITBIT_REDIRECT_URI
     
-    print(f"[OAUTH] Handling callback with redirect_uri: {redirect_uri}\n")
+    print(f"[OAUTH] Handling callback with redirect_uri: {redirect_uri}")
     
     tokens = exchange_code_for_token(code, redirect_uri)
     if tokens:
@@ -147,14 +134,14 @@ def handle_oauth_callback(code, req=None):
         save_tokens_to_data_dir(tokens['access_token'], tokens['refresh_token'])
         config_store['fitbit_connected'] = True
         
-        print(f"[OAUTH] Fitbit connected successfully!\n")
+        print(f"[OAUTH] Fitbit connected successfully!")
         
         return """
         <html>
-            <body style=\"font-family: Arial; text-align: center; padding: 50px;\">
-                <h2 style=\"color: #28a745;\">✓ Fitbit Connected Successfully!</h2>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h2 style="color: #28a745;">✓ Fitbit Connected Successfully!</h2>
                 <p>You can close this window and return to the dashboard.</p>
-                <p style=\"color: #6c757d; font-size: 14px;\">The dashboard will update automatically.</p>
+                <p style="color: #6c757d; font-size: 14px;">The dashboard will update automatically.</p>
                 <script>
                     // Try to notify parent window
                     if (window.opener) {
@@ -166,5 +153,5 @@ def handle_oauth_callback(code, req=None):
         </html>
         """
     
-    print(f"[OAUTH] Token exchange failed\n")
+    print(f"[OAUTH] Token exchange failed")
     return None

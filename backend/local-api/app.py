@@ -61,7 +61,7 @@ def root_handler():
     """Root endpoint - handles OAuth callback and status."""
     code = request.args.get('code')
     if code:
-        result = handle_oauth_callback(code, request)
+        result = handle_oauth_callback(code)
         if result:
             return result
         return "Token exchange failed - check server logs", 400
