@@ -3,8 +3,14 @@ Azure Blob Storage Service
 Stores sleep predictions and data in Azure Blob Storage for persistence and analytics.
 """
 import json
+import os
 from datetime import datetime
-from .config import AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER
+
+AZURE_STORAGE_CONNECTION_STRING = os.getenv(
+    'AZURE_STORAGE_CONNECTION_STRING',
+    ''
+)
+AZURE_STORAGE_CONTAINER = os.getenv('AZURE_STORAGE_CONTAINER', 'smart-alarm-data')
 
 blob_service_client = None
 container_client = None
