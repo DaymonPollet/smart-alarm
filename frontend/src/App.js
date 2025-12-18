@@ -242,6 +242,7 @@ function App() {
     handleManualRefresh, handleConnectFitbit, handleFetchHistory,
     handleToggleMonitoring, handleSetAlarm, handleDisableAlarm,
     handleSnoozeAlarm, handleDismissAlarm, handleToggleCloud,
+    handleManualCode,
   } = useSleepDashboard();
 
   return (
