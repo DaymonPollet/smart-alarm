@@ -2,7 +2,7 @@
 
 This directory contains Kubernetes manifests for deploying the Smart Alarm application to a Raspberry Pi running k3s.
 
-## 📁 Structure
+##  Structure
 
 ```
 k8s/
@@ -25,7 +25,7 @@ k8s/
 └── README.md
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -67,7 +67,7 @@ The deployment is automated via GitHub Actions:
 # Options: full, canary, rollback, promote
 ```
 
-## 🔐 Secrets Management
+## Secrets Management
 
 ### Option 1: Generate from environment variables
 
@@ -110,7 +110,7 @@ Required secrets in GitHub repository settings:
 - `AZURE_ML_ENDPOINT`
 - `AZURE_ML_API_KEY`
 
-## 📊 Deployment Strategies
+## Deployment Strategies
 
 ### Full Deployment
 Deploys the entire application from scratch. Use for:
@@ -151,7 +151,7 @@ CANARY_TAG=v2.0.0 ./scripts/deploy-local.sh canary
 └─────────────────┘    └─────────────────┘
 ```
 
-## 💾 Storage
+##s Storage
 
 ### Local Storage (hostPath)
 Data persisted on the Raspberry Pi at `/data/smart-alarm/`:
@@ -170,7 +170,7 @@ For cloud backup and sync:
 - Logs synced to `logs` container
 - Configured via `AZURE_STORAGE_CONNECTION_STRING`
 
-## 🔍 Monitoring & Debugging
+## Monitoring & Debugging
 
 ### Check Deployment Status
 
@@ -221,7 +221,7 @@ kubectl exec -it -n smart-alarm deployment/smart-alarm-backend -- /bin/sh
 kubectl get pv,pvc -n smart-alarm
 ```
 
-## 🌐 Access Points
+## Access Points
 
 | Service | URL | Description |
 |---------|-----|-------------|
@@ -230,7 +230,7 @@ kubectl get pv,pvc -n smart-alarm
 | Health Check | `http://<PI-IP>:30080/api/health` | Health endpoint |
 | Ingress | `http://smart-alarm.local` | Domain-based (requires DNS) |
 
-## 🔧 Customization
+## Customization
 
 ### Change Resource Limits
 
@@ -264,7 +264,7 @@ data:
   MY_CUSTOM_VAR: "value"
 ```
 
-## 🧹 Cleanup
+## Cleanup
 
 ```bash
 # Remove entire deployment
