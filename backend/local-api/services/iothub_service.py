@@ -72,13 +72,18 @@ twin_listener_thread = None
 
 # Rate limiting for IoT Hub operations (free tier: 8000 messages/day = ~5.5/min)
 _last_report_time = 0
-_MIN_REPORT_INTERVAL = 20  # 20 seconds = 3 per minute (max 4320/day, under 8000 limit)
+_MIN_REPORT_INTERVAL = 30  # Increased to 30s to be safe
 _pending_report = None  # Queue up properties if rate limited
 _reporting_from_callback = False  # Prevent callback loops
 _last_mqtt_publish_time = 0
 _MIN_MQTT_INTERVAL = 5  # Minimum 5 seconds between MQTT twin publishes
 _initial_sync_done = False  # Track if initial sync completed
 _pending_flush_timer = None  # Timer to flush pending reports
+
+# Circuit Breaker to prevent message spikes
+_message_count = 0
+_message_count_window = 0
+_MAX_MESSAGES_PER_MINUTE = 10  # Absolute hard limit
 
 def get_default_twin_properties():
     return {
@@ -165,17 +170,24 @@ def on_twin_desired_properties_patch(patch, is_initial_sync=False):
             new_window = alarm_window if alarm_window else current_window
             new_enabled = alarm_enabled if alarm_enabled is not None else (True if alarm_time else current_enabled)
             
-            alarm_config['wake_time'] = new_time
-            alarm_config['window_minutes'] = new_window
-            alarm_config['enabled'] = new_enabled
-            alarm_config['triggered'] = False
-            
-            print(f"[IOTHUB] Alarm updated from twin: enabled={new_enabled}, time={new_time}, window={new_window}")
-            
-            # Report back with our property names
-            reported['alarm_enabled'] = new_enabled
-            reported['alarm_time'] = new_time
-            reported['smart_wakeup_window'] = new_window
+            # Check if anything actually changed to avoid loops
+            if (new_time == current_time and 
+                new_window == current_window and 
+                new_enabled == current_enabled):
+                print(f"[IOTHUB] Alarm patch matches current state - skipping update/report")
+                alarm_changed = False
+            else:
+                alarm_config['wake_time'] = new_time
+                alarm_config['window_minutes'] = new_window
+                alarm_config['enabled'] = new_enabled
+                alarm_config['triggered'] = False
+                
+                print(f"[IOTHUB] Alarm updated from twin: enabled={new_enabled}, time={new_time}, window={new_window}")
+                
+                # Report back with our property names
+                reported['alarm_enabled'] = new_enabled
+                reported['alarm_time'] = new_time
+                reported['smart_wakeup_window'] = new_window
             
         except Exception as e:
             print(f"[IOTHUB] Failed to apply alarm from twin: {e}")
@@ -334,6 +346,7 @@ def _do_report_twin(properties):
 def _keepalive_loop():
     """Background thread to flush pending reports only."""
     global _pending_report, _last_report_time, stop_twin_listener
+    global _message_count, _message_count_window
     
     while not stop_twin_listener:
         try:
@@ -342,14 +355,25 @@ def _keepalive_loop():
             if stop_twin_listener:
                 break
             
+            # Circuit Breaker Reset (redundant but safe)
+            current_time = time.time()
+            if current_time - _message_count_window > 60:
+                _message_count = 0
+                _message_count_window = current_time
+            
             if device_client and _pending_report:
-                current_time = time.time()
+                if _message_count >= _MAX_MESSAGES_PER_MINUTE:
+                    print(f"[IOTHUB] Circuit breaker active - skipping flush")
+                    continue
+
                 if current_time - _last_report_time >= _MIN_REPORT_INTERVAL:
                     to_send = _pending_report.copy()
                     _pending_report = None
                     try:
                         device_client.patch_twin_reported_properties(to_send)
                         _last_report_time = current_time
+                        _message_count += 1
+                        print(f"[IOTHUB] Flushed pending properties: {to_send}")
                     except Exception:
                         _pending_report = to_send
                         
@@ -366,9 +390,20 @@ def report_twin_properties(properties, skip_mqtt=False):
         skip_mqtt: If True, skip MQTT publish (use when called from twin callback to avoid spam)
     """
     global _last_report_time, _pending_report, _last_mqtt_publish_time
+    global _message_count, _message_count_window
     
     iothub_success = False
     mqtt_success = False
+    
+    # Circuit Breaker Check
+    current_time = time.time()
+    if current_time - _message_count_window > 60:
+        _message_count = 0
+        _message_count_window = current_time
+        
+    if _message_count >= _MAX_MESSAGES_PER_MINUTE:
+        print(f"[IOTHUB] CIRCUIT BREAKER TRIPPED: Sent {_message_count} messages in <1min. Dropping report.")
+        return False
     
     # Optionally publish to MQTT with rate limiting
     if not skip_mqtt:
@@ -384,7 +419,6 @@ def report_twin_properties(properties, skip_mqtt=False):
             print(f"[MQTT] Rate limited - skipping twin publish\n")
     
     # Rate limit IoT Hub operations
-    current_time = time.time()
     time_since_last = current_time - _last_report_time
     
     if time_since_last < _MIN_REPORT_INTERVAL:
@@ -407,10 +441,16 @@ def report_twin_properties(properties, skip_mqtt=False):
             
             device_client.patch_twin_reported_properties(to_send)
             _last_report_time = current_time
+            _message_count += 1  # Increment circuit breaker count
             iothub_success = True
             print(f"[IOTHUB] Reported twin properties: {to_send}\n")
         except Exception as e:
             print(f"[IOTHUB] Twin report failed: {e}")
+            # If failed, restore pending report? 
+            # Actually, better to just log. The next update will include it if we re-queue.
+            # But here we lost it. Let's try to be safe.
+            if _pending_report is None:
+                _pending_report = to_send
     
     return iothub_success or mqtt_success
 

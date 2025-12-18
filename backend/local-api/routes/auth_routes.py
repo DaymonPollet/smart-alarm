@@ -48,10 +48,16 @@ def fitbit_login():
         'redirect_uri': redirect_uri
     }
     
+    auth_url = f'https://www.fitbit.com/oauth2/authorize?{urlencode(params)}'
+    
+    print(f"[AUTH] Generating login URL with redirect_uri: {redirect_uri}")
+    print(f"[AUTH] NOTE: If accessing remotely, this redirect will fail (localhost). Use /api/auth/code")
+    
     return jsonify({
-        "auth_url": f'https://www.fitbit.com/oauth2/authorize?{urlencode(params)}',
+        "auth_url": auth_url,
         "redirect_uri": redirect_uri,
-        "note": "This redirect_uri must be registered at dev.fitbit.com"
+        "note": "This redirect_uri must be registered at dev.fitbit.com",
+        "manual_mode": "If redirect fails (remote access), copy the 'code' parameter from the failed URL and POST to /api/auth/code"
     })
 
 

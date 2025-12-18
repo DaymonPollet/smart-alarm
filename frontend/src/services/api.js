@@ -45,6 +45,9 @@ export const sleepService = {
 export const authService = {
   // Get Fitbit OAuth login URL
   getLoginUrl: () => api.get('/api/auth/login'),
+  
+  // Submit manual auth code (for remote access)
+  submitManualCode: (code) => api.post('/api/auth/code', { code }),
 };
 
 /**

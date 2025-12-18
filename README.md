@@ -187,4 +187,29 @@ smart-alarm/
 
 ## License
 
-Educational project for Howest Cloud Computing course, everyone is free to contribute to this smoldering mess of a codebase X_X
+Educational project for Howest Cloud Computing course.
+
+## Remote Authentication (Important)
+
+Fitbit OAuth requires a strict Redirect URI match. Most configurations use `http://127.0.0.1:8080`.
+
+**Issue:** When accessing the dashboard from a laptop (e.g., `http://raspberrypi:30080`), the Fitbit login button redirects you to `http://127.0.0.1:8080` on your *laptop*, where the backend is not running.
+
+**Workaround:**
+1. Click "Connect Fitbit" on the dashboard.
+2. Complete the login on the Fitbit website.
+3. When the browser fails to load `http://127.0.0.1:8080...`, look at the URL bar.
+4. Copy the `code` parameter from the URL (e.g., `?code=12345abcde...`).
+5. Click "Having trouble connecting remotely?" on the dashboard.
+6. Paste the code into the manual entry form.
+
+## Troubleshooting
+
+### IoT Hub Message Spikes
+The system includes a circuit breaker to prevent accidental message loops (e.g., infinite sync between desired and reported properties). If more than 10 messages are sent in 1 minute, the circuit breaker trips and blocks further reports for that minute.
+
+### "Disconnected" State
+If the dashboard shows "Disconnected":
+1. Check if `FITBIT_REFRESH_TOKEN` is valid.
+2. Use the manual authentication flow described above.
+3. Check container logs for specific error messages.

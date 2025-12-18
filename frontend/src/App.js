@@ -35,29 +35,72 @@ const SystemStatus = ({ config }) => (
   </Card>
 );
 
-const FitbitConnection = ({ config, fetching, monitoring, message, onConnect, onFetch, onToggleMonitoring }) => (
-  <Card title="Fitbit Connection">
-    {!config.fitbit_connected ? (
-      <>
-        <button onClick={onConnect} className="btn btn-primary">Connect Fitbit</button>
-        <p className="note">Click to authorize access to your Fitbit sleep data</p>
-      </>
-    ) : (
-      <>
-        <button onClick={onFetch} className="btn btn-primary" disabled={fetching}>
-          {fetching ? 'Fetching...' : 'Fetch Sleep History'}
-        </button>
-        <button onClick={onToggleMonitoring} className={monitoring ? 'btn btn-danger' : 'btn btn-success'} disabled={fetching}>
-          {monitoring ? 'Stop Monitoring' : 'Start Monitoring'}
-        </button>
-        {message && <p className="message">{message}</p>}
-        <p className="note">
-          {monitoring ? 'Monitoring active - Checking every 60 seconds' : 'Fetch History: Get recent sessions | Start Monitoring: Check every 60s'}
-        </p>
-      </>
-    )}
-  </Card>
-);
+const FitbitConnection = ({ config, fetching, monitoring, message, onConnect, onFetch, onToggleMonitoring, onManualCode }) => {
+  const [showManual, setShowManual] = React.useState(false);
+  const [manualCode, setManualCode] = React.useState('');
+
+  const handleManualSubmit = () => {
+    if (manualCode) {
+      onManualCode(manualCode);
+      setManualCode('');
+      setShowManual(false);
+    }
+  };
+
+  return (
+    <Card title="Fitbit Connection">
+      {!config.fitbit_connected ? (
+        <>
+          <button onClick={onConnect} className="btn btn-primary">Connect Fitbit</button>
+          <p className="note">Click to authorize access to your Fitbit sleep data</p>
+          
+          <div className="manual-auth-section" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+            <button 
+              onClick={() => setShowManual(!showManual)} 
+              className="btn btn-link"
+              style={{ fontSize: '0.8rem', color: '#666', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Having trouble connecting remotely?
+            </button>
+            
+            {showManual && (
+              <div className="manual-auth-form" style={{ marginTop: '10px' }}>
+                <p className="note" style={{ fontSize: '0.8rem' }}>
+                  1. Click "Connect Fitbit" above.<br/>
+                  2. If the redirect fails (localhost refused), copy the <code>code=...</code> part from the URL bar.<br/>
+                  3. Paste it here:
+                </p>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <input 
+                    type="text" 
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    placeholder="Paste code here..."
+                    style={{ flex: 1, padding: '5px' }}
+                  />
+                  <button onClick={handleManualSubmit} className="btn btn-secondary" style={{ padding: '5px 10px' }}>Submit</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <button onClick={onFetch} className="btn btn-primary" disabled={fetching}>
+            {fetching ? 'Fetching...' : 'Fetch Sleep History'}
+          </button>
+          <button onClick={onToggleMonitoring} className={monitoring ? 'btn btn-danger' : 'btn btn-success'} disabled={fetching}>
+            {monitoring ? 'Stop Monitoring' : 'Start Monitoring'}
+          </button>
+          {message && <p className="message">{message}</p>}
+          <p className="note">
+            {monitoring ? 'Monitoring active - Checking every 60 seconds' : 'Fetch History: Get recent sessions | Start Monitoring: Check every 60s'}
+          </p>
+        </>
+      )}
+    </Card>
+  );
+};
 
 const AlarmConfig = ({ config, alarmTime, alarmWindow, setAlarmTime, setAlarmWindow, onSet, onDisable }) => (
   <Card title="⏰ Smart Alarm" variant="alarm">
@@ -222,6 +265,7 @@ function App() {
         <FitbitConnection 
           config={config} fetching={fetching} monitoring={monitoring} message={message}
           onConnect={handleConnectFitbit} onFetch={handleFetchHistory} onToggleMonitoring={handleToggleMonitoring}
+          onManualCode={handleManualCode}
         />
         <AlarmConfig 
           config={config} alarmTime={alarmTime} alarmWindow={alarmWindow}

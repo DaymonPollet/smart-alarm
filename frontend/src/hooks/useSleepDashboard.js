@@ -247,6 +247,18 @@ export function useSleepDashboard() {
     }
   }, [config.cloud_enabled, showMessage, fetchData, fetchConfig]);
 
+  const handleManualCode = useCallback(async (code) => {
+    try {
+      setMessage('Submitting manual code...');
+      await authService.submitManualCode(code);
+      showMessage('Connected successfully!');
+      await Promise.all([fetchData(), fetchConfig()]);
+    } catch (error) {
+      alert('Error submitting code: ' + (error.response?.data?.message || error.message));
+      setMessage('');
+    }
+  }, [fetchData, fetchConfig, showMessage]);
+
   // Computed Values
   const chartData = data.slice(0, 20).reverse().map((d, idx) => ({
     index: idx + 1,
@@ -287,5 +299,6 @@ export function useSleepDashboard() {
     handleSnoozeAlarm,
     handleDismissAlarm,
     handleToggleCloud,
+    handleManualCode,
   };
 }
